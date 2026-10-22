@@ -1,0 +1,33 @@
+# Python fájlok – tartalom nélkül commitolunk, csak a mappastruktúra kell
+backend/**/*.py
+
+# Scenario JSON fájlok – szintén csak a mappa kell most
+backend/scenarios/*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Környezeti változók – sosem kerül verziókezelésbe
+.env
+
+# Node modules (frontend)
+node_modules/
+
+# Build outputok
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYS.AIOPS // 01 - CONTEXTUAL ALERT ENGINE</title>
+    <style>
+        :root {
+            --bg-color: #080c0a;
+            --panel-bg: #0f1612;
+            --panel-border: #1e3023;
+            --text-main: #c7d2cd;
+            --text-dimmed: #6b8575;
+            --accent-green: #10b981;
+            --accent-green-dim: rgba(16, 185, 129, 0.15);
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            gap: 12px;
+        }
+
+        /* Fejléc: Bal oldalt Redis státusz, jobb oldalt a szimuláló gombok */
+        header {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 4px;
+        }
+
+        .redis-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            color: var(--text-dimmed);
+        }
+        .redis-status span {
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn-sim {
+            background: transparent;
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+        .btn-sim:hover {
+            background: var(--accent-green);
+            color: var(--bg-color);
+        }
+        .btn-sim.danger {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+        .btn-sim.danger:hover {
+            background: var(--accent-red);
+            color: var(--bg-color);
+        }
+        .btn-sim.reset {
+            border-color: var(--text-dimmed);
+            color: var(--text-dimmed);
+        }
+        .btn-sim.reset:hover {
+            border-color: var(--text-main);
+            background: var(--text-main);
+            color: var(--bg-color);
+        }
+
+        /* Fő elrendezés: Hero (Gráf + Terminál) balra, System Vitals jobbra */
+        main {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 12px;
+            flex: 1;
+        }
+
+        @media (max-width: 1100px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hero-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .sidebar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Panelek */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 12px;
+            position: relative;
+        }
+
+        .panel::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0;
+            width: 4px; height: 4px;
+            border-top: 1px solid var(--accent-green);
+            border-left: 1px solid var(--accent-green);
+        }
+        .panel::after {
+            content: "";
+            position: absolute;
+            top: 0; right: 0;
+            width: 4px; height: 4px;
+            border-top: 1px solid var(--accent-green);
+            border-right: 1px solid var(--accent-green);
+        }
+
+        .panel-header {
+            font-size: 11px;
+            color: var(--text-dimmed);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px dashed var(--panel-border);
+            padding-bottom: 6px;
+        }
+
+        /* Gráf ábrázolás a Hero Sectionben */
+        .matrix-container {
+            height: 240px;
+            border: 1px solid var(--panel-border);
+            background: #050806;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            position: relative;
+            padding: 10px;
+        }
+
+        .radar-ring {
+            position: absolute;
+            border: 1px dashed rgba(16, 185, 129, 0.15);
+            border-radius: 50%;
+        }
+
+        .node-circle {
+            background: var(--panel-bg);
+            border: 2px solid var(--accent-green);
+            padding: 10px 16px;
+            border-radius: 4px;
+            text-align: center;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+            z-index: 2;
+            width: 140px;
+        }
+        .node-circle.root { border-color: var(--accent-red); color: var(--accent-red); }
+        .node-circle.suppressed { border-color: var(--accent-amber); color: var(--accent-amber); }
+
+        .topo-line {
+            position: absolute;
+            height: 2px;
+            background: var(--panel-border);
+            top: 50%;
+            left: 15%;
+            right: 15%;
+            z-index: 1;
+        }
+
+        /* Terminál a gráf alatt */
+        .terminal-box {
+            background: #050806;
+            border: 1px solid var(--panel-border);
+            padding: 10px;
+            font-size: 11px;
+            height: 150px;
+            overflow-y: auto;
+            color: var(--accent-green);
+            line-height: 1.4;
+        }
+        .log-line { margin-bottom: 4px; }
+        .log-warn { color: var(--accent-amber); }
+        .log-err { color: var(--accent-red); }
+
+        /* Jobb oldal: System Vitals */
+        .vital-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .vital-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--accent-green);
+        }
+
+        /* Alsó sáv: Chart */
+        .bottom-section {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 12px;
+        }
+        
+        .chart-mock {
+            height: 70px;
+            background: #050806;
+            border: 1px solid var(--panel-border);
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+            padding: 0 10px;
+            gap: 4px;
+            margin-top: 6px;
+        }
+        .chart-bar {
+            flex: 1;
+            background: var(--accent-green-dim);
+            border-top: 2px solid var(--accent-green);
+            transition: height 0.3s;
+        }
+        .chart-bar.alert {
+            background: rgba(239, 68, 68, 0.15);
+            border-top-color: var(--accent-red);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- FEJLÉC: Redis státusz balra, 3 szimuláló gomb jobbra -->
+    <header>
+        <div class="redis-status">
+            <span>SYS.AIOPS // REDIS STORAGE:</span> ACTIVE (AOF) | SSE STREAM: <span>CONNECTED</span>
+        </div>
+        <div class="header-controls">
+            <button class="btn-sim" onclick="triggerScenario('scaling')">01. Pod Scaling</button>
+            <button class="btn-sim" onclick="triggerScenario('cascading')">02. Cascading DB</button>
+            <button class="btn-sim danger" onclick="triggerScenario('combined')">03. Storm</button>
+            <button class="btn-sim reset" onclick="resetSystem()">Reset</button>
+        </div>
+    </header>
+
+    <!-- FŐ TARTALOM: Hero Section (Gráf + Terminál) balra, System Vitals jobbra -->
+    <main>
+        <div class="hero-section">
+            <!-- Gráf ábrázolás -->
+            <section class="panel">
+                <div class="panel-header">
+                    <span id="active-mode-title">Network Response Matrix (Kiali Topology)</span>
+                    <span>REAL-TIME ANALYSIS</span>
+                </div>
+                <div class="matrix-container">
+                    <div class="radar-ring" style="width: 180px; height: 180px;"></div>
+                    <div class="topo-line"></div>
+                    
+                    <div class="node-circle" id="node-gw">
+                        <div style="font-weight:bold;">api-gateway</div>
+                        <div style="font-size: 9px; color: var(--accent-green); margin-top: 4px;" id="status-gw">OK (0%)</div>
+                    </div>
+
+                    <div class="node-circle" id="node-order">
+                        <div style="font-weight:bold;">order-service</div>
+                        <div style="font-size: 9px; color: var(--accent-green); margin-top: 4px;" id="status-order">OK (0%)</div>
+                    </div>
+
+                    <div class="node-circle" id="node-payment">
+                        <div style="font-weight:bold;">payment-db</div>
+                        <div style="font-size: 9px; color: var(--accent-green); margin-top: 4px;" id="status-payment">OK (0%)</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Terminál -->
+            <section class="panel">
+                <div class="panel-header">
+                    <span>Terminal // Event Stream &amp; Audit Log</span>
+                    <span>SSE ACTIVE</span>
+                </div>
+                <div class="terminal-box" id="terminal-logs">
+                    <div class="log-line">[14:28:01] ROOT@SYS.CORE:~$ /start_stream.sh</div>
+                    <div class="log-line">INITIATING KIALI GRAPH ADAPTER ... OK</div>
+                    <div class="log-line">CONNECTING TO REDIS WINDOW (60s TTL) ... OK</div>
+                    <div class="log-line">[14:28:05] DATA STREAM ESTABLISHED VIA SSE. AWAITING TRIGGERS.</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- JOBB OLDAL: System Vitals -->
+        <div class="sidebar-section">
+            <section class="panel" style="flex: 1;">
+                <div class="panel-header">
+                    <span>System Vitals (ARR)</span>
+                    <span style="color: var(--accent-green);">LIVE</span>
+                </div>
+                
+                <div class="vital-row">
+                    <div>
+                        <div style="font-size: 10px; color: var(--text-dimmed);">RAW ALERTS</div>
+                        <div style="font-size: 11px;">Prometheus Ingest</div>
+                    </div>
+                    <div class="vital-value" id="val-raw" style="color: var(--text-main);">42</div>
+                </div>
+
+                <div class="vital-row">
+                    <div>
+                        <div style="font-size: 10px; color: var(--text-dimmed);">SUPPRESSED NOISE</div>
+                        <div style="font-size: 11px;">Scale / Restart Filter</div>
+                    </div>
+                    <div class="vital-value" id="val-suppressed" style="color: var(--accent-amber);">28</div>
+                </div>
+
+                <div class="vital-row">
+                    <div>
+                        <div style="font-size: 10px; color: var(--text-dimmed);">CORRELATED INCIDENTS</div>
+                        <div style="font-size: 11px;">RCA Root Causes</div>
+                    </div>
+                    <div class="vital-value" id="val-incidents" style="color: var(--accent-red);">3</div>
+                </div>
+
+                <div class="vital-row" style="border-bottom: none; margin-bottom: 0;">
+                    <div>
+                        <div style="font-size: 10px; color: var(--text-dimmed);">ALERT RED. RATE</div>
+                        <div style="font-size: 11px;">Efficiency Metric</div>
+                    </div>
+                    <div class="vital-value" id="val-arr">66.7%</div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <span>Global Node Map</span>
+                    <span>CLUSTER 01</span>
+                </div>
+                <div style="height: 100px; background: #050806; border: 1px solid var(--panel-border); display: flex; align-items: center; justify-content: center; color: var(--text-dimmed); font-size: 10px; text-align: center; padding: 10px;">
+                    [ KUBERNETES NODE MESH ]<br>
+                    NAMESPACES: istio-system, default<br>
+                    ACTIVE PODS: 12 / 12 RUNNING
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- ALSÓ SÁV: Csak a Chart -->
+    <div class="bottom-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+            <span style="color: var(--text-dimmed);">SIGNAL RESPONSE MAP // HISTORICAL ALERT REDUCTION TIMELINE</span>
+            <span style="color: var(--accent-green);">BAND: 2.4 GHZ | WINDOW: 60S</span>
+        </div>
+        <div class="chart-mock" id="chart-bars">
+            <!-- JavaScript generálja a sávokat -->
+        </div>
+    </div>
+
+    <script>
+        // Chart sávok generálása
+        const chartContainer = document.getElementById('chart-bars');
+        for (let i = 0; i < 50; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'chart-bar';
+            bar.style.height = (Math.random() * 60 + 15) + '%';
+            chartContainer.appendChild(bar);
+        }
+
+        // Szimulációs interakciók
+        function triggerScenario(type) {
+            const valRaw = document.getElementById('val-raw');
+            const valSup = document.getElementById('val-suppressed');
+            const valInc = document.getElementById('val-incidents');
+            const valArr = document.getElementById('val-arr');
+            const modeTitle = document.getElementById('active-mode-title');
+            const terminal = document.getElementById('terminal-logs');
+            
+            const nodeGw = document.getElementById('node-gw');
+            const statusGw = document.getElementById('status-gw');
+            const nodeOrder = document.getElementById('node-order');
+            const statusOrder = document.getElementById('status-order');
+            const nodePayment = document.getElementById('node-payment');
+            const statusPayment = document.getElementById('status-payment');
+
+            const now = new Date().toLocaleTimeString();
+
+            if (type === 'scaling') {
+                modeTitle.innerText = "Network Response Matrix // Mode: Pod Scaling Noise";
+                valRaw.innerText = "15";
+                valSup.innerText = "15";
+                valInc.innerText = "0";
+                valArr.innerText = "100.0%";
+
+                nodeGw.className = "node-circle"; statusGw.innerText = "OK (0%)"; statusGw.style.color = "var(--accent-green)";
+                nodeOrder.className = "node-circle suppressed"; statusOrder.innerText = "SUPPRESSED"; statusOrder.style.color = "var(--accent-amber)";
+                nodePayment.className = "node-circle"; statusPayment.innerText = "OK (0%)"; statusPayment.style.color = "var(--accent-green)";
+
+                terminal.innerHTML += `<div class="log-line log-warn">[${now}] SCENARIO 01: order-service HPA scale-up detected. 15 alerts suppressed.</div>`;
+            } else if (type === 'cascading') {
+                modeTitle.innerText = "Network Response Matrix // Mode: Cascading DB Failure (RCA)";
+                valRaw.innerText = "24";
+                valSup.innerText = "2";
+                valInc.innerText = "1 (Grouped)";
+                valArr.innerText = "91.7%";
+
+                nodeGw.className = "node-circle suppressed"; statusGw.innerText = "SYMPTOM"; statusGw.style.color = "var(--accent-amber)";
+                nodeOrder.className = "node-circle suppressed"; statusOrder.innerText = "SYMPTOM"; statusOrder.style.color = "var(--accent-amber)";
+                nodePayment.className = "node-circle root"; statusPayment.innerText = "ROOT CAUSE"; statusPayment.style.color = "var(--accent-red)";
+
+                terminal.innerHTML += `<div class="log-line log-err">[${now}] SCENARIO 02: payment-db timeout. RCA identified root cause. 3 symptoms grouped.</div>`;
+            } else if (type === 'combined') {
+                modeTitle.innerText = "Network Response Matrix // Mode: Combined Storm";
+                valRaw.innerText = "50";
+                valSup.innerText = "35";
+                valInc.innerText = "2";
+                valArr.innerText = "90.0%";
+
+                nodeGw.className = "node-circle root"; statusGw.innerText = "ROOT CAUSE"; statusGw.style.color = "var(--accent-red)";
+                nodeOrder.className = "node-circle suppressed"; statusOrder.innerText = "SUPPRESSED"; statusOrder.style.color = "var(--accent-amber)";
+                nodePayment.className = "node-circle suppressed"; statusPayment.innerText = "SYMPTOM"; statusPayment.style.color = "var(--accent-amber)";
+
+                terminal.innerHTML += `<div class="log-line log-err">[${now}] SCENARIO 03: Combined storm processed. Noise suppressed, critical path isolated.</div>`;
+            }
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function resetSystem() {
+            document.getElementById('val-raw').innerText = "42";
+            document.getElementById('val-suppressed').innerText = "28";
+            document.getElementById('val-incidents').innerText = "3";
+            document.getElementById('val-arr').innerText = "66.7%";
+            document.getElementById('active-mode-title').innerText = "Network Response Matrix (Kiali Topology)";
+
+            document.getElementById('node-gw').className = "node-circle"; document.getElementById('status-gw').innerText = "OK (0%)"; document.getElementById('status-gw').style.color = "var(--accent-green)";
+            document.getElementById('node-order').className = "node-circle"; document.getElementById('status-order').innerText = "OK (0%)"; document.getElementById('status-order').style.color = "var(--accent-green)";
+            document.getElementById('node-payment').className = "node-circle"; document.getElementById('status-payment').innerText = "OK (0%)"; document.getElementById('status-payment').style.color = "var(--accent-green)";
+
+            const terminal = document.getElementById('terminal-logs');
+            const now = new Date().toLocaleTimeString();
+            terminal.innerHTML += `<div class="log-line">[${now}] SYSTEM RESET. Redis window cleared.</div>`;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+    </script>
+</body>
+</html>
