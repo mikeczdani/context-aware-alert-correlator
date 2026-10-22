@@ -1,0 +1,151 @@
+{
+  "_comment": "Kombinált hibavihar – Ez a legkomplexebb forgatókönyv, amely egyszerre tartalmaz zajt és valódi incidenseket. Az 'auth' service podjai skálázódnak (HPA esemény, desired=4 de ready=2 még), ami átmeneti 503-as hibákat okoz – ezt a zajszűrőnek SUPPRESSED_SCALING-ként kell kezelnie. Ugyanakkor a 'db' service valóban hibás (nem skálázódás, nem restart okozza), ami lépcsőzetesen érinti a payment-et és az inventory-t. Az RCA algoritmusa tehát egyszerre kell: (1) elnyomja az auth zajt, és (2) azonosítsa a db-t ROOT_CAUSE-ként a payment+inventory SYMPTOM-okkal. Ez demonstrálja a rendszer legfontosabb képességét: valós és zaj riasztások szétválasztását egyidejűleg.",
+  "scenario_id": "mixed_storm",
+  "description": "auth scaling noise + real db failure happening simultaneously",
+  "kiali_graph": {
+    "namespace": "default",
+    "nodes": [
+      {
+        "id": "node-api-gateway",
+        "service": "api-gateway",
+        "namespace": "default",
+        "response_time_ms": 760.0,
+        "http_error_rate": 0.11,
+        "traffic_rate_rps": 120.0
+      },
+      {
+        "id": "node-auth",
+        "service": "auth",
+        "namespace": "default",
+        "response_time_ms": 420.0,
+        "http_error_rate": 0.08,
+        "traffic_rate_rps": 95.0,
+        "_comment": "Látszólag hibás, de valójában HPA skálázódás okozza az átmeneti 503-okat"
+      },
+      {
+        "id": "node-order",
+        "service": "order",
+        "namespace": "default",
+        "response_time_ms": 790.0,
+        "http_error_rate": 0.10,
+        "traffic_rate_rps": 80.0
+      },
+      {
+        "id": "node-payment",
+        "service": "payment",
+        "namespace": "default",
+        "response_time_ms": 1600.0,
+        "http_error_rate": 0.19,
+        "traffic_rate_rps": 40.0
+      },
+      {
+        "id": "node-inventory",
+        "service": "inventory",
+        "namespace": "default",
+        "response_time_ms": 1500.0,
+        "http_error_rate": 0.16,
+        "traffic_rate_rps": 55.0
+      },
+      {
+        "id": "node-db",
+        "service": "db",
+        "namespace": "default",
+        "response_time_ms": 4100.0,
+        "http_error_rate": 0.28,
+        "traffic_rate_rps": 90.0,
+        "_comment": "A db valóban hibás – nem skálázódik, nem indult újra, ez a valódi gyökérok"
+      }
+    ],
+    "edges": [
+      { "id": "edge-1", "source": "node-api-gateway", "target": "node-auth",      "traffic_rate_rps": 95.0 },
+      { "id": "edge-2", "source": "node-api-gateway", "target": "node-order",     "traffic_rate_rps": 80.0 },
+      { "id": "edge-3", "source": "node-order",       "target": "node-payment",   "traffic_rate_rps": 40.0 },
+      { "id": "edge-4", "source": "node-order",       "target": "node-inventory", "traffic_rate_rps": 55.0 },
+      { "id": "edge-5", "source": "node-payment",     "target": "node-db",        "traffic_rate_rps": 40.0 },
+      { "id": "edge-6", "source": "node-inventory",   "target": "node-db",        "traffic_rate_rps": 50.0 }
+    ]
+  },
+  "k8s_contexts": [
+    { "service": "api-gateway", "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    {
+      "service": "auth",
+      "desired_replicas": 4,
+      "ready_replicas": 2,
+      "restarts_last_minute": 0,
+      "is_scaling": true,
+      "last_scale_event_age_seconds": 35.0,
+      "_comment": "HPA skálázódás: desired=4, ready=2 még – az átmeneti hibák SUPPRESSED_SCALING-ot kapnak"
+    },
+    { "service": "order",     "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "payment",   "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "inventory", "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "db",        "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 }
+  ],
+  "alerts": [
+    {
+      "alertname": "HighErrorRate",
+      "service": "auth",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "auth-svc", "env": "production" },
+      "annotations": { "summary": "auth HTTP error rate 8% – HPA scale-out in progress (desired=4, ready=2)" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "db",
+      "namespace": "default",
+      "severity": "critical",
+      "status": "firing",
+      "labels": { "job": "db-svc", "env": "production" },
+      "annotations": { "summary": "db p99 response time 4100ms (threshold: 500ms)" }
+    },
+    {
+      "alertname": "HighErrorRate",
+      "service": "payment",
+      "namespace": "default",
+      "severity": "critical",
+      "status": "firing",
+      "labels": { "job": "payment-svc", "env": "production" },
+      "annotations": { "summary": "payment HTTP error rate 19% – upstream db timeout" }
+    },
+    {
+      "alertname": "HighErrorRate",
+      "service": "inventory",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "inventory-svc", "env": "production" },
+      "annotations": { "summary": "inventory HTTP error rate 16% – upstream db timeout" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "order",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "order-svc", "env": "production" },
+      "annotations": { "summary": "order p99 latency 790ms – payment and inventory degraded" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "api-gateway",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "api-gateway-svc", "env": "production" },
+      "annotations": { "summary": "api-gateway p99 latency 760ms – auth scaling + order degraded" }
+    }
+  ],
+  "expected_outcome": {
+    "suppressed": ["auth"],
+    "root_cause": "db",
+    "symptoms": ["payment", "inventory", "order", "api-gateway"],
+    "incident_count": 1,
+    "raw_alert_count": 6,
+    "suppressed_count": 1,
+    "correlated_count": 1,
+    "arr_pct": 83.3,
+    "reason": "auth alert suppressed (HPA scale-out, is_scaling=true, last_scale_event 35s ago). db is the real root cause – deepest downstream node, no K8s event, highest error rate."
+  }
+}

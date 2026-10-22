@@ -1,0 +1,75 @@
+{
+  "_comment": "Alapállapot – minden szolgáltatás egészséges, nincs aktív riasztás. Ez az állapot töltődik be reset után, és ez a kiindulópont minden tesztforgatókönyv előtt.",
+  "scenario_id": "healthy_baseline",
+  "description": "All services healthy – no alerts firing",
+  "kiali_graph": {
+    "namespace": "default",
+    "nodes": [
+      {
+        "id": "node-api-gateway",
+        "service": "api-gateway",
+        "namespace": "default",
+        "response_time_ms": 45.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 120.0
+      },
+      {
+        "id": "node-auth",
+        "service": "auth",
+        "namespace": "default",
+        "response_time_ms": 30.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 95.0
+      },
+      {
+        "id": "node-order",
+        "service": "order",
+        "namespace": "default",
+        "response_time_ms": 55.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 80.0
+      },
+      {
+        "id": "node-payment",
+        "service": "payment",
+        "namespace": "default",
+        "response_time_ms": 60.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 40.0
+      },
+      {
+        "id": "node-inventory",
+        "service": "inventory",
+        "namespace": "default",
+        "response_time_ms": 35.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 55.0
+      },
+      {
+        "id": "node-db",
+        "service": "db",
+        "namespace": "default",
+        "response_time_ms": 10.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 90.0
+      }
+    ],
+    "edges": [
+      { "id": "edge-1", "source": "node-api-gateway", "target": "node-auth",      "traffic_rate_rps": 95.0 },
+      { "id": "edge-2", "source": "node-api-gateway", "target": "node-order",     "traffic_rate_rps": 80.0 },
+      { "id": "edge-3", "source": "node-order",       "target": "node-payment",   "traffic_rate_rps": 40.0 },
+      { "id": "edge-4", "source": "node-order",       "target": "node-inventory", "traffic_rate_rps": 55.0 },
+      { "id": "edge-5", "source": "node-payment",     "target": "node-db",        "traffic_rate_rps": 40.0 },
+      { "id": "edge-6", "source": "node-inventory",   "target": "node-db",        "traffic_rate_rps": 50.0 }
+    ]
+  },
+  "k8s_contexts": [
+    { "service": "api-gateway", "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "auth",        "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "order",       "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "payment",     "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "inventory",   "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "db",          "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 }
+  ],
+  "alerts": []
+}

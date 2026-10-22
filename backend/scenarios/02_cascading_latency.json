@@ -1,0 +1,129 @@
+{
+  "_comment": "Lépcsőzetes késleltetés – A 'db' service válaszideje kritikusan megnőtt (valódi hiba: pl. lassú query vagy kapcsolatpool-kimerülés). Mivel a payment és az inventory is a db-t hívja, mindkettő lelassul, az order pedig tőlük függ. A Prometheus mind a 4 érintett service-re riasztást küld. Az RCA algoritmusa (correlate_and_find_rca) a hívási láncban legmélyebben elhelyezkedő hibás csomópontot – a db-t – jelöli ROOT_CAUSE-nak, a többit SYMPTOM-nak. Nincs skálázódás és nincs pod-újraindulás, tehát zajszűrés NEM történik.",
+  "scenario_id": "cascading_db_timeout",
+  "description": "db service high latency causes cascading slowdown across payment, inventory, order",
+  "kiali_graph": {
+    "namespace": "default",
+    "nodes": [
+      {
+        "id": "node-api-gateway",
+        "service": "api-gateway",
+        "namespace": "default",
+        "response_time_ms": 980.0,
+        "http_error_rate": 0.06,
+        "traffic_rate_rps": 120.0
+      },
+      {
+        "id": "node-auth",
+        "service": "auth",
+        "namespace": "default",
+        "response_time_ms": 32.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 95.0
+      },
+      {
+        "id": "node-order",
+        "service": "order",
+        "namespace": "default",
+        "response_time_ms": 870.0,
+        "http_error_rate": 0.09,
+        "traffic_rate_rps": 80.0
+      },
+      {
+        "id": "node-payment",
+        "service": "payment",
+        "namespace": "default",
+        "response_time_ms": 1450.0,
+        "http_error_rate": 0.15,
+        "traffic_rate_rps": 40.0
+      },
+      {
+        "id": "node-inventory",
+        "service": "inventory",
+        "namespace": "default",
+        "response_time_ms": 1380.0,
+        "http_error_rate": 0.12,
+        "traffic_rate_rps": 55.0
+      },
+      {
+        "id": "node-db",
+        "service": "db",
+        "namespace": "default",
+        "response_time_ms": 3200.0,
+        "http_error_rate": 0.22,
+        "traffic_rate_rps": 90.0,
+        "_comment": "A db válaszideje 3200ms – ez a gyökérok. Normál esetben 10ms."
+      }
+    ],
+    "edges": [
+      { "id": "edge-1", "source": "node-api-gateway", "target": "node-auth",      "traffic_rate_rps": 95.0 },
+      { "id": "edge-2", "source": "node-api-gateway", "target": "node-order",     "traffic_rate_rps": 80.0 },
+      { "id": "edge-3", "source": "node-order",       "target": "node-payment",   "traffic_rate_rps": 40.0 },
+      { "id": "edge-4", "source": "node-order",       "target": "node-inventory", "traffic_rate_rps": 55.0 },
+      { "id": "edge-5", "source": "node-payment",     "target": "node-db",        "traffic_rate_rps": 40.0 },
+      { "id": "edge-6", "source": "node-inventory",   "target": "node-db",        "traffic_rate_rps": 50.0 }
+    ]
+  },
+  "k8s_contexts": [
+    { "service": "api-gateway", "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "auth",        "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "order",       "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "payment",     "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "inventory",   "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "db",          "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 }
+  ],
+  "alerts": [
+    {
+      "alertname": "HighLatency",
+      "service": "db",
+      "namespace": "default",
+      "severity": "critical",
+      "status": "firing",
+      "labels": { "job": "db-svc", "env": "production" },
+      "annotations": { "summary": "db p99 response time 3200ms (threshold: 500ms)" }
+    },
+    {
+      "alertname": "HighErrorRate",
+      "service": "payment",
+      "namespace": "default",
+      "severity": "critical",
+      "status": "firing",
+      "labels": { "job": "payment-svc", "env": "production" },
+      "annotations": { "summary": "payment HTTP error rate 15% – upstream db timeout" }
+    },
+    {
+      "alertname": "HighErrorRate",
+      "service": "inventory",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "inventory-svc", "env": "production" },
+      "annotations": { "summary": "inventory HTTP error rate 12% – upstream db timeout" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "order",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "order-svc", "env": "production" },
+      "annotations": { "summary": "order p99 latency 870ms – payment and inventory degraded" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "api-gateway",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "api-gateway-svc", "env": "production" },
+      "annotations": { "summary": "api-gateway p99 latency 980ms – downstream order degraded" }
+    }
+  ],
+  "expected_outcome": {
+    "root_cause": "db",
+    "symptoms": ["payment", "inventory", "order", "api-gateway"],
+    "suppressed": [],
+    "incident_count": 1,
+    "reason": "db is the deepest downstream node in the call chain with the highest error rate and latency – all other alerts are consequences"
+  }
+}
