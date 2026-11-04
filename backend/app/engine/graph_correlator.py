@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import networkx as nx
 
 from app.engine.noise_filter import filter_alerts_batch
+from app.engine.severity_scorer import score_incident
 from app.schemas.alert import RawAlert
 from app.schemas.incident import (
     AffectedNode,
@@ -364,16 +365,20 @@ async def correlate(
         real_alerting_services=real_alerting_services,
     )
 
-    return CorrelatedIncident(
-        status=incident_status,
-        root_cause_service=root_cause_service,
-        affected_nodes=affected_nodes,
-        raw_alert_count=raw_alert_count,
-        suppressed_count=suppressed_count,
-        correlated_count=correlated_count,
-        summary=summary,
-        raw_alerts=[a.model_dump(mode="json") for a in alerts],
-        topology_snapshot=graph.model_dump(mode="json"),
+    return score_incident(
+        incident=CorrelatedIncident(
+            status=incident_status,
+            root_cause_service=root_cause_service,
+            affected_nodes=affected_nodes,
+            raw_alert_count=raw_alert_count,
+            suppressed_count=suppressed_count,
+            correlated_count=correlated_count,
+            summary=summary,
+            raw_alerts=[a.model_dump(mode="json") for a in alerts],
+            topology_snapshot=graph.model_dump(mode="json"),
+        ),
+        graph=graph,
+        nx_graph=G,
     )
 
 
