@@ -6,6 +6,13 @@
   padding-bottom: 16px;
 }
 
+.logoArea p {
+  font-size: 0.75rem;
+  color: var(--text-dimmed);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
 .logoArea h1 {
   font-family: var(--font-display);
   font-size: 2.5rem;
@@ -14,13 +21,6 @@
   color: var(--accent-neon);
   text-shadow: 0 0 20px var(--accent-glow);
   text-transform: uppercase;
-}
-
-.logoArea p {
-  font-size: 0.75rem;
-  color: var(--text-dimmed);
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
 }
 
 .actions {
@@ -39,7 +39,7 @@
   cursor: pointer;
   text-transform: uppercase;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  letter-spacing: 0.05em;
+  position: relative;
 }
 
 .btn:hover {

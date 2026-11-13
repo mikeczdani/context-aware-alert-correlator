@@ -13,26 +13,26 @@ export default function DashboardPage() {
       <AppHeader />
 
       <main className={styles.main}>
-        {/* Bal oldal: Gráf + Incidens feed */}
+        {/* Bal oszlop: Gráf + Terminál */}
         <div className={styles.heroSection}>
-          <Panel title="Network Response Matrix (Kiali Topology)" badge="REAL-TIME ANALYSIS">
+          <Panel title="Network Response Matrix" badge="REDIS + NETWORKX">
             {/* ServiceGraph komponens ide kerül a 3. lépésben */}
           </Panel>
 
-          <Panel title="Terminal // Event Stream & Audit Log" badge="SSE ACTIVE">
+          <Panel title="Terminal // SSE Stream & Audit" badge="LIVE SYNC" badgeColor="var(--accent-purple)">
             <IncidentFeed />
           </Panel>
         </div>
 
-        {/* Jobb oldal: System Vitals + Node Map */}
+        {/* Jobb oszlop: System Vitals + Node Cluster State */}
         <div className={styles.sidebarSection}>
           <SystemVitals />
 
-          <Panel title="Global Node Map" badge="CLUSTER 01">
+          <Panel title="Node Cluster State">
             <div className={styles.nodeMap}>
-              [ KUBERNETES NODE MESH ]<br />
-              NAMESPACES: istio-system, default<br />
-              ACTIVE PODS: 12 / 12 RUNNING
+              [ K8s CLUSTER: MOCK_MODE ]<br />
+              ISTIO SERVICE MESH: ACTIVE<br />
+              NODES ONLINE: 3 / 3
             </div>
           </Panel>
         </div>

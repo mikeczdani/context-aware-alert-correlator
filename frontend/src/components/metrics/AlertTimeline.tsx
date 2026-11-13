@@ -5,7 +5,7 @@ import styles from './AlertTimeline.module.css'
 
 // 50 bar-t mutatunk – az utolsó N incidens alapján az alert számokból,
 // a többi random baseline (green)
-const TOTAL_BARS = 50
+const TOTAL_BARS = 60
 
 export default function AlertTimeline() {
   const { data: incidents } = useQuery({
@@ -30,10 +30,10 @@ export default function AlertTimeline() {
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionHeaderLabel}>
-          SIGNAL RESPONSE MAP // HISTORICAL ALERT REDUCTION TIMELINE
+          SIGNAL RESPONSE MAP // HISTORICAL TIMELINE
         </span>
         <span className={styles.sectionHeaderBadge}>
-          BAND: 2.4 GHZ | WINDOW: 60S
+          SLIDING WINDOW: 60S
         </span>
       </div>
       <div className={styles.chart}>

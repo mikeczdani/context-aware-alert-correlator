@@ -5,9 +5,9 @@
   position: relative;
 }
 
-/* Brutalista sarok díszítő elem */
+/* Brutalista sarok dísz – a HTML .pane::before mintájára */
 .panel::before {
-  content: "■";
+  content: "\25a0";
   position: absolute;
   top: 8px;
   left: 8px;

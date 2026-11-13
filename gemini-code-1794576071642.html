@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIOps // PROTOCOL.X</title>
+    <!-- Futurisztikus, elrugaszkodott betűtípus a Google Fonts-ból -->
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030504;
+            --card-bg: #090e0c;
+            --card-border: #15261d;
+            --text-main: #e2ede6;
+            --text-dimmed: #527562;
+            --accent-neon: #00ff66;
+            --accent-glow: rgba(0, 255, 102, 0.2);
+            --accent-purple: #a855f7;
+            --warning: #ffb703;
+            --danger: #ff0055;
+            --font-display: 'Syne', sans-serif;
+            --font-mono: 'Space Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            min-height: 100vh;
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .brutal-container {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* Elrugaszkodott, nyers fejléc */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid var(--accent-neon);
+            padding-bottom: 16px;
+        }
+
+        .logo-area h1 {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--accent-neon);
+            text-shadow: 0 0 20px var(--accent-glow);
+            text-transform: uppercase;
+        }
+
+        .logo-area p {
+            font-size: 0.75rem;
+            color: var(--text-dimmed);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-cyber {
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 10px 18px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+        .btn-cyber:hover {
+            background: var(--accent-neon);
+            color: var(--bg-color);
+            border-color: var(--accent-neon);
+            box-shadow: 0 0 15px var(--accent-neon);
+        }
+        .btn-cyber.danger:hover {
+            background: var(--danger);
+            border-color: var(--danger);
+            box-shadow: 0 0 15px var(--danger);
+            color: white;
+        }
+        .btn-cyber.reset {
+            color: var(--text-dimmed);
+            border-color: var(--text-dimmed);
+        }
+
+        /* Aszimmetrikus Layout */
+        .workspace {
+            display: grid;
+            grid-template-columns: 1.6fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .workspace { grid-template-columns: 1fr; }
+        }
+
+        .pane {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 24px;
+            position: relative;
+        }
+
+        /* Brutalista sarok díszek */
+        .pane::before {
+            content: "■";
+            position: absolute;
+            top: 8px; left: 8px;
+            font-size: 8px;
+            color: var(--accent-neon);
+        }
+
+        .pane-title {
+            font-family: var(--font-display);
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-main);
+            border-bottom: 1px dashed var(--card-border);
+            padding-bottom: 10px;
+        }
+
+        /* Kiali Gráf Mátrix - Sci-Fi stílusban */
+        .matrix-box {
+            height: 300px;
+            background: #010302;
+            border: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .matrix-box::after {
+            content: "TOPOLOGY_FEED // KIALI_API";
+            position: absolute;
+            bottom: 8px; right: 12px;
+            font-size: 9px;
+            color: var(--text-dimmed);
+        }
+
+        .node-brutal {
+            background: var(--bg-color);
+            border: 2px solid var(--accent-neon);
+            padding: 14px 18px;
+            text-align: center;
+            z-index: 2;
+            width: 150px;
+            box-shadow: 4px 4px 0px rgba(0, 255, 102, 0.2);
+            transition: all 0.3s;
+        }
+        .node-brutal.root { border-color: var(--danger); box-shadow: 4px 4px 0px rgba(255, 0, 85, 0.3); color: var(--danger); }
+        .node-brutal.suppressed { border-color: var(--warning); box-shadow: 4px 4px 0px rgba(255, 183, 3, 0.2); color: var(--warning); }
+
+        .topo-line-brutal {
+            position: absolute;
+            height: 2px;
+            background: var(--accent-neon);
+            opacity: 0.3;
+            top: 50%;
+            left: 15%;
+            right: 15%;
+            z-index: 1;
+        }
+
+        /* Terminál */
+        .terminal-brutal {
+            background: #010302;
+            border: 1px solid var(--card-border);
+            padding: 16px;
+            font-size: 0.75rem;
+            height: 180px;
+            overflow-y: auto;
+            color: var(--accent-neon);
+            line-height: 1.6;
+        }
+        .log { margin-bottom: 6px; }
+        .log.warn { color: var(--warning); }
+        .log.err { color: var(--danger); }
+
+        /* Jobb oldali System Vitals - Brutalista Mátrix */
+        .vitals-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .vital-card {
+            background: #010302;
+            border: 1px solid var(--card-border);
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .vital-label {
+            font-size: 0.75rem;
+            color: var(--text-dimmed);
+            text-transform: uppercase;
+        }
+
+        .vital-number {
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            color: var(--accent-neon);
+        }
+        .vital-number.warn { color: var(--warning); }
+        .vital-number.err { color: var(--danger); }
+
+        /* Alsó Chart */
+        .timeline-box {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 24px;
+        }
+
+        .chart-raw {
+            height: 80px;
+            background: #010302;
+            border: 1px solid var(--card-border);
+            display: flex;
+            align-items: flex-end;
+            padding: 0 10px;
+            gap: 4px;
+            margin-top: 12px;
+        }
+
+        .c-bar {
+            flex: 1;
+            background: rgba(0, 255, 102, 0.15);
+            border-top: 2px solid var(--accent-neon);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="brutal-container">
+        <!-- Fejléc -->
+        <header>
+            <div class="logo-area">
+                <p>SYS.AIOPS // ARCHITECTURE v2.4</p>
+                <h1>Context Engine</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn-cyber" onclick="runScenario('scaling')">01. Scaling Noise</button>
+                <button class="btn-cyber" onclick="runScenario('cascading')">02. Cascading DB</button>
+                <button class="btn-cyber danger" onclick="runScenario('combined')">03. Storm</button>
+                <button class="btn-cyber reset" onclick="resetSystem()">Reset</button>
+            </div>
+        </header>
+
+        <!-- Munkafelület -->
+        <div class="workspace">
+            
+            <!-- Bal oszlop: Gráf + Terminál -->
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+                <section class="pane">
+                    <div class="pane-title">
+                        <span id="mode-title">Network Response Matrix</span>
+                        <span style="color: var(--accent-neon); font-size: 0.7rem;">REDIS + NETWORKX</span>
+                    </div>
+                    <div class="matrix-box">
+                        <div class="topo-line-brutal"></div>
+                        
+                        <div class="node-brutal" id="n-gw">
+                            <div style="font-weight: 700; font-size: 0.85rem;">api-gateway</div>
+                            <div style="font-size: 0.7rem; color: var(--accent-neon); margin-top: 4px;" id="s-gw">OK (0%)</div>
+                        </div>
+
+                        <div class="node-brutal" id="n-order">
+                            <div style="font-weight: 700; font-size: 0.85rem;">order-service</div>
+                            <div style="font-size: 0.7rem; color: var(--accent-neon); margin-top: 4px;" id="s-order">OK (0%)</div>
+                        </div>
+
+                        <div class="node-brutal" id="n-payment">
+                            <div style="font-weight: 700; font-size: 0.85rem;">payment-db</div>
+                            <div style="font-size: 0.7rem; color: var(--accent-neon); margin-top: 4px;" id="s-payment">OK (0%)</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="pane">
+                    <div class="pane-title">
+                        <span>Terminal // SSE Stream &amp; Audit</span>
+                        <span style="color: var(--accent-purple);">LIVE SYNC</span>
+                    </div>
+                    <div class="terminal-box" id="term">
+                        <div class="log">[19:00:01] ROOT@AIOPS:~$ python3 -m app.main --mode=mock</div>
+                        <div class="log">REDIS AOF ENGINE STARTED ON PORT 6379.</div>
+                        <div class="log">[19:00:03] SSE EVENT STREAM PIPELINE INITIALIZED. AWAITING WEBHOOKS.</div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Jobb oszlop: System Vitals -->
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+                <section class="pane" style="flex: 1;">
+                    <div class="pane-title">
+                        <span>System Vitals</span>
+                        <span style="color: var(--accent-neon);">ARR %</span>
+                    </div>
+                    
+                    <div class="vitals-grid">
+                        <div class="vital-card">
+                            <div>
+                                <div class="vital-label">Raw Alerts</div>
+                                <div style="font-size: 0.7rem; color: var(--text-dimmed);">Prometheus Ingest</div>
+                            </div>
+                            <div class="vital-number" id="v-raw">42</div>
+                        </div>
+
+                        <div class="vital-card">
+                            <div>
+                                <div class="vital-label">Suppressed Noise</div>
+                                <div style="font-size: 0.7rem; color: var(--text-dimmed);">Scale / Restart Filter</div>
+                            </div>
+                            <div class="vital-number warn" id="v-sup">28</div>
+                        </div>
+
+                        <div class="vital-card">
+                            <div>
+                                <div class="vital-label">Correlated Incidents</div>
+                                <div style="font-size: 0.7rem; color: var(--text-dimmed);">RCA Root Causes</div>
+                            </div>
+                            <div class="vital-number err" id="v-inc">3</div>
+                        </div>
+
+                        <div class="vital-card" style="border-color: var(--accent-neon); background: rgba(0,255,102,0.03);">
+                            <div>
+                                <div class="vital-label" style="color: var(--accent-neon); font-weight: bold;">Alert Reduction (ARR)</div>
+                                <div style="font-size: 0.7rem; color: var(--text-dimmed);">Efficiency Rate</div>
+                            </div>
+                            <div class="vital-number" id="v-arr">66.7%</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="pane">
+                    <div class="pane-title">Node Cluster State</div>
+                    <div style="background: #010302; border: 1px solid var(--card-border); padding: 14px; font-size: 0.75rem; color: var(--text-dimmed); text-align: center;">
+                        [ K8s CLUSTER: MOCK_MODE ]<br>
+                        ISTIO SERVICE MESH: ACTIVE<br>
+                        NODES ONLINE: 3 / 3
+                    </div>
+                </section>
+            </div>
+
+        </div>
+
+        <!-- Alsó Idővonal -->
+        <div class="timeline-box">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; text-transform: uppercase;">
+                <span style="color: var(--text-dimmed);">Signal Response Map // Historical Timeline</span>
+                <span style="color: var(--accent-neon);">SLIDING WINDOW: 60S</span>
+            </div>
+            <div class="chart-raw" id="bars"></div>
+        </div>
+    </div>
+
+    <script>
+        const barsContainer = document.getElementById('bars');
+        for (let i = 0; i < 60; i++) {
+            const b = document.createElement('div');
+            b.className = 'c-bar';
+            b.style.height = (Math.random() * 70 + 10) + '%';
+            barsContainer.appendChild(b);
+        }
+
+        function runScenario(type) {
+            const vRaw = document.getElementById('v-raw');
+            const vSup = document.getElementById('v-sup');
+            const vInc = document.getElementById('v-inc');
+            const vArr = document.getElementById('v-arr');
+            const mode = document.getElementById('mode-title');
+            const term = document.getElementById('term');
+            
+            const nGw = document.getElementById('n-gw');
+            const sGw = document.getElementById('s-gw');
+            const nOrder = document.getElementById('n-order');
+            const sOrder = document.getElementById('s-order');
+            const nPayment = document.getElementById('n-payment');
+            const sPayment = document.getElementById('s-payment');
+            const now = new Date().toLocaleTimeString();
+
+            if (type === 'scaling') {
+                mode.innerText = "Matrix // Pod Scaling Noise Suppression";
+                vRaw.innerText = "15"; vSup.innerText = "15"; vInc.innerText = "0"; vArr.innerText = "100.0%";
+                nGw.className = "node-brutal"; sGw.innerText = "OK (0%)"; sGw.style.color = "var(--accent-neon)";
+                nOrder.className = "node-brutal suppressed"; sOrder.innerText = "SUPPRESSED"; sOrder.style.color = "var(--warning)";
+                nPayment.className = "node-brutal"; sPayment.innerText = "OK (0%)"; sPayment.style.color = "var(--accent-neon)";
+                term.innerHTML += `<div class="log warn">[${now}] SCENARIO 01: order-service scale-up noise filtered out successfully.</div>`;
+            } else if (type === 'cascading') {
+                mode.innerText = "Matrix // Cascading DB Failure (RCA)";
+                vRaw.innerText = "24"; vSup.innerText = "2"; vInc.innerText = "1 (Grouped)"; vArr.innerText = "91.7%";
+                nGw.className = "node-brutal suppressed"; sGw.innerText = "SYMPTOM"; sGw.style.color = "var(--warning)";
+                nOrder.className = "node-brutal suppressed"; sOrder.innerText = "SYMPTOM"; sOrder.style.color = "var(--warning)";
+                nPayment.className = "node-brutal root"; sPayment.innerText = "ROOT CAUSE"; sPayment.style.color = "var(--danger)";
+                term.innerHTML += `<div class="log err">[${now}] SCENARIO 02: payment-db isolated as ROOT CAUSE via NetworkX.</div>`;
+            } else if (type === 'combined') {
+                mode.innerText = "Matrix // Combined Storm Protocol";
+                vRaw.innerText = "50"; vSup.innerText = "35"; vInc.innerText = "2"; vArr.innerText = "90.0%";
+                nGw.className = "node-brutal root"; sGw.innerText = "ROOT CAUSE"; sGw.style.color = "var(--danger)";
+                nOrder.className = "node-brutal suppressed"; sOrder.innerText = "SUPPRESSED"; sOrder.style.color = "var(--warning)";
+                nPayment.className = "node-brutal"; sPayment.innerText = "SYMPTOM"; sPayment.style.color = "var(--warning)";
+                term.innerHTML += `<div class="log err">[${now}] SCENARIO 03: Combined storm resolved. Critical path isolated.</div>`;
+            }
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function resetSystem() {
+            document.getElementById('v-raw').innerText = "42";
+            document.getElementById('v-sup').innerText = "28";
+            document.getElementById('v-inc').innerText = "3";
+            document.getElementById('v-arr').innerText = "66.7%";
+            document.getElementById('mode-title').innerText = "Network Response Matrix";
+            document.getElementById('n-gw').className = "node-brutal"; document.getElementById('s-gw').innerText = "OK (0%)"; document.getElementById('s-gw').style.color = "var(--accent-neon)";
+            document.getElementById('n-order').className = "node-brutal"; document.getElementById('s-order').innerText = "OK (0%)"; document.getElementById('s-order').style.color = "var(--accent-neon)";
+            document.getElementById('n-payment').className = "node-brutal"; document.getElementById('s-payment').innerText = "OK (0%)"; document.getElementById('s-payment').style.color = "var(--accent-neon)";
+            const term = document.getElementById('term');
+            const now = new Date().toLocaleTimeString();
+            term.innerHTML += `<div class="log">[${now}] SYSTEM REBOOTED. Redis window purged.</div>`;
+            term.scrollTop = term.scrollHeight;
+        }
+    </script>
+</body>
+</html>

@@ -16,37 +16,39 @@ export default function SystemVitals() {
   const arr        = data?.alert_reduction_rate_pct ?? 0
 
   return (
-    <Panel title="System Vitals (ARR)" badge="LIVE" className={styles.vitalsPanel}>
-      <div className={styles.row}>
-        <div>
-          <div className={styles.label}>RAW ALERTS</div>
-          <div className={styles.sublabel}>Prometheus Ingest</div>
+    <Panel title="System Vitals" badge="ARR %" className={styles.vitalsPanel}>
+      <div className={styles.grid}>
+        <div className={styles.card}>
+          <div>
+            <div className={styles.label}>Raw Alerts</div>
+            <div className={styles.sublabel}>Prometheus Ingest</div>
+          </div>
+          <div className={styles.number}>{raw}</div>
         </div>
-        <div className={`${styles.value} ${styles['value--main']}`}>{raw}</div>
-      </div>
 
-      <div className={styles.row}>
-        <div>
-          <div className={styles.label}>SUPPRESSED NOISE</div>
-          <div className={styles.sublabel}>Scale / Restart Filter</div>
+        <div className={styles.card}>
+          <div>
+            <div className={styles.label}>Suppressed Noise</div>
+            <div className={styles.sublabel}>Scale / Restart Filter</div>
+          </div>
+          <div className={`${styles.number} ${styles['number--warn']}`}>{suppressed}</div>
         </div>
-        <div className={`${styles.value} ${styles['value--amber']}`}>{suppressed}</div>
-      </div>
 
-      <div className={styles.row}>
-        <div>
-          <div className={styles.label}>CORRELATED INCIDENTS</div>
-          <div className={styles.sublabel}>RCA Root Causes</div>
+        <div className={styles.card}>
+          <div>
+            <div className={styles.label}>Correlated Incidents</div>
+            <div className={styles.sublabel}>RCA Root Causes</div>
+          </div>
+          <div className={`${styles.number} ${styles['number--err']}`}>{incidents}</div>
         </div>
-        <div className={`${styles.value} ${styles['value--red']}`}>{incidents}</div>
-      </div>
 
-      <div className={styles.row}>
-        <div>
-          <div className={styles.label}>ALERT RED. RATE</div>
-          <div className={styles.sublabel}>Efficiency Metric</div>
+        <div className={`${styles.card} ${styles['card--arr']}`}>
+          <div>
+            <div className={`${styles.label} ${styles['label--arr']}`}>Alert Reduction (ARR)</div>
+            <div className={styles.sublabel}>Efficiency Rate</div>
+          </div>
+          <div className={styles.number}>{arr.toFixed(1)}%</div>
         </div>
-        <div className={styles.value}>{arr.toFixed(1)}%</div>
       </div>
     </Panel>
   )

@@ -1,11 +1,11 @@
+/* Aszimmetrikus munkafelület – a HTML .workspace mintájára */
 .main {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 12px;
-  flex: 1;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
   .main {
     grid-template-columns: 1fr;
   }
@@ -14,26 +14,22 @@
 .heroSection {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
 }
 
 .sidebarSection {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
 }
 
-/* Global node map placeholder */
+/* Node cluster state szöveges doboz */
 .nodeMap {
-  height: 100px;
-  background: #050806;
-  border: 1px solid var(--panel-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #010302;
+  border: 1px solid var(--card-border);
+  padding: 14px;
+  font-size: 0.75rem;
   color: var(--text-dimmed);
-  font-size: 10px;
   text-align: center;
-  padding: 10px;
   line-height: 1.8;
 }

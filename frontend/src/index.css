@@ -34,6 +34,7 @@ body {
   align-items: flex-start;
 }
 
+/* Brutalista konténer – a HTML .brutal-container mintájára */
 #root {
   width: 100%;
   max-width: 1400px;

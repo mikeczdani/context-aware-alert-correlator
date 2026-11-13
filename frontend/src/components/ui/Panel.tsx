@@ -5,16 +5,23 @@ interface PanelProps {
   title: string
   badge?: string
   badgeColor?: string
-  children: ReactNode
+  children?: ReactNode
   className?: string
 }
 
-export default function Panel({ title, badge, children, className }: PanelProps) {
+export default function Panel({ title, badge, badgeColor, children, className }: PanelProps) {
   return (
     <div className={`${styles.panel} ${className ?? ''}`}>
       <div className={styles.panelHeader}>
         <span>{title}</span>
-        {badge && <span className={styles.panelHeaderBadge}>{badge}</span>}
+        {badge && (
+          <span
+            className={styles.panelHeaderBadge}
+            style={badgeColor ? { color: badgeColor } : undefined}
+          >
+            {badge}
+          </span>
+        )}
       </div>
       {children}
     </div>

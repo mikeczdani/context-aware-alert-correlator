@@ -1,9 +1,15 @@
+/* A panel kitölti a sidebar magasságát – a HTML "flex: 1" mintájára */
+.vitalsPanel {
+  flex: 1;
+}
+
 .grid {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
+/* Egy vitál kártya – a HTML .vital-card mintájára */
 .card {
   background: #010302;
   border: 1px solid var(--card-border);
@@ -13,12 +19,11 @@
   align-items: center;
 }
 
+/* Kiemelt ARR kártya – neon keret + halvány neon háttér */
 .card--arr {
   border-color: var(--accent-neon);
   background: rgba(0, 255, 102, 0.03);
 }
-
-.labelGroup {}
 
 .label {
   font-size: 0.75rem;
@@ -34,7 +39,6 @@
 .sublabel {
   font-size: 0.7rem;
   color: var(--text-dimmed);
-  margin-top: 2px;
 }
 
 .number {
@@ -43,5 +47,10 @@
   color: var(--accent-neon);
 }
 
-.number--warn { color: var(--warning); }
-.number--err  { color: var(--danger);  }
+.number--warn {
+  color: var(--warning);
+}
+
+.number--err {
+  color: var(--danger);
+}
