@@ -1,0 +1,20 @@
+# FastAPI web framework + ASGI server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Data validation + settings (.env) – Pydantic v2
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# Redis async client (TTL window, incident store, Pub/Sub)
+redis==5.2.1
+
+# Graph engine (DiGraph build, RCA traversal, PageRank severity)
+# numpy + scipy are required by networkx's pagerank (pagerank_scipy backend),
+# they are optional deps of networkx and must be installed explicitly.
+networkx==3.4.2
+numpy==2.2.1
+scipy==1.15.0
+
+# Async HTTP client (Kiali collector + chaos_runner simulator)
+httpx==0.28.1
