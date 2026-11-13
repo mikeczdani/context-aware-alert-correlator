@@ -37,8 +37,8 @@ body {
 /* Brutalista konténer – a HTML .brutal-container mintájára */
 #root {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1600px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
