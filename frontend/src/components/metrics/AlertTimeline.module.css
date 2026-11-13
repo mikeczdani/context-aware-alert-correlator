@@ -1,0 +1,45 @@
+.section {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.sectionHeaderLabel {
+  color: var(--text-dimmed);
+}
+
+.sectionHeaderBadge {
+  color: var(--accent-green);
+}
+
+.chart {
+  height: 70px;
+  background: #050806;
+  border: 1px solid var(--panel-border);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 10px;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.bar {
+  flex: 1;
+  background: var(--accent-green-dim);
+  border-top: 2px solid var(--accent-green);
+  transition: height 0.3s;
+}
+
+.bar--alert {
+  background: rgba(239, 68, 68, 0.15);
+  border-top-color: var(--accent-red);
+}

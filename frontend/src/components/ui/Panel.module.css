@@ -1,0 +1,36 @@
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  padding: 24px;
+  position: relative;
+}
+
+/* Brutalista sarok díszítő elem */
+.panel::before {
+  content: "■";
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 8px;
+  color: var(--accent-neon);
+}
+
+.panelHeader {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-main);
+  border-bottom: 1px dashed var(--card-border);
+  padding-bottom: 10px;
+}
+
+.panelHeaderBadge {
+  color: var(--accent-neon);
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+}

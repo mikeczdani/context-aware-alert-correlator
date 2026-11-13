@@ -1,0 +1,47 @@
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: #010302;
+  border: 1px solid var(--card-border);
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card--arr {
+  border-color: var(--accent-neon);
+  background: rgba(0, 255, 102, 0.03);
+}
+
+.labelGroup {}
+
+.label {
+  font-size: 0.75rem;
+  color: var(--text-dimmed);
+  text-transform: uppercase;
+}
+
+.label--arr {
+  color: var(--accent-neon);
+  font-weight: bold;
+}
+
+.sublabel {
+  font-size: 0.7rem;
+  color: var(--text-dimmed);
+  margin-top: 2px;
+}
+
+.number {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  color: var(--accent-neon);
+}
+
+.number--warn { color: var(--warning); }
+.number--err  { color: var(--danger);  }

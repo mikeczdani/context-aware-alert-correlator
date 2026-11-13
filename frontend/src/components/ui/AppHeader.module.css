@@ -1,0 +1,74 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 2px solid var(--accent-neon);
+  padding-bottom: 16px;
+}
+
+.logoArea h1 {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--accent-neon);
+  text-shadow: 0 0 20px var(--accent-glow);
+  text-transform: uppercase;
+}
+
+.logoArea p {
+  font-size: 0.75rem;
+  color: var(--text-dimmed);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  padding: 10px 18px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: 0.05em;
+}
+
+.btn:hover {
+  background: var(--accent-neon);
+  color: var(--bg-color);
+  border-color: var(--accent-neon);
+  box-shadow: 0 0 15px var(--accent-neon);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnDanger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 0 15px var(--danger);
+  color: white;
+}
+
+.btnReset {
+  color: var(--text-dimmed);
+  border-color: var(--text-dimmed);
+}
+
+.btnReset:hover {
+  background: var(--text-main);
+  border-color: var(--text-main);
+  color: var(--bg-color);
+  box-shadow: none;
+}

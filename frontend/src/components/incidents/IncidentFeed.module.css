@@ -1,0 +1,156 @@
+.feed {
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.empty {
+  color: #64748b;
+  font-size: 14px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.loading {
+  color: #64748b;
+  font-size: 14px;
+  padding: 16px;
+}
+
+/* Incidens kártya */
+.card {
+  background: #1e293b;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid #334155;
+}
+
+.cardHeader {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cardHeader:hover {
+  background: #263144;
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rootCause {
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.timestamp {
+  color: #64748b;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.summary {
+  color: #94a3b8;
+  font-size: 13px;
+  margin: 0;
+}
+
+.counters {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.expandHint {
+  margin-left: auto;
+  color: #475569;
+}
+
+/* Lenyitható részletek */
+.details {
+  border-top: 1px solid #334155;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Érintett csomópont sor */
+.node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #0f172a;
+  border-radius: 6px;
+}
+
+.node--ROOT_CAUSE        { border-left: 3px solid #ef4444; }
+.node--SYMPTOM           { border-left: 3px solid #f59e0b; }
+.node--HEALTHY           { border-left: 3px solid #22c55e; }
+.node--SUPPRESSED        { border-left: 3px solid #64748b; }
+.node--SUPPRESSED_SCALING { border-left: 3px solid #3b82f6; }
+.node--SUPPRESSED_RESTART { border-left: 3px solid #8b5cf6; }
+
+.nodeHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nodeName {
+  color: #f1f5f9;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.nodeScore {
+  color: #64748b;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.nodeMetrics {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.suppressionReason {
+  color: #94a3b8;
+  font-size: 12px;
+  margin: 0;
+  font-style: italic;
+}
+
+/* Status badge-ek */
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+}
+
+.badge--OPEN              { background: #ef4444; }
+.badge--SUPPRESSED        { background: #64748b; }
+.badge--RESOLVED          { background: #22c55e; }
+
+.badge--HEALTHY           { background: #22c55e; }
+.badge--ROOT_CAUSE        { background: #ef4444; }
+.badge--SYMPTOM           { background: #f59e0b; }
+.badge--SUPPRESSED_SCALING { background: #3b82f6; }
+.badge--SUPPRESSED_RESTART { background: #8b5cf6; }

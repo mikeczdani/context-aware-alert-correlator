@@ -1,0 +1,38 @@
+.grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.card {
+  flex: 1;
+  min-width: 160px;
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+.card--blue   { border-top: 3px solid #3b82f6; }
+.card--yellow { border-top: 3px solid #f59e0b; }
+.card--red    { border-top: 3px solid #ef4444; }
+.card--green  { border-top: 3px solid #22c55e; }
+
+.label {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.value {
+  color: #f1f5f9;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.skeleton {
+  flex: 1;
+  height: 88px;
+  background: #1e293b;
+  border-radius: 8px;
+  opacity: 0.5;
+}

@@ -1,0 +1,39 @@
+.main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 12px;
+  flex: 1;
+}
+
+@media (max-width: 1100px) {
+  .main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.heroSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebarSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Global node map placeholder */
+.nodeMap {
+  height: 100px;
+  background: #050806;
+  border: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dimmed);
+  font-size: 10px;
+  text-align: center;
+  padding: 10px;
+  line-height: 1.8;
+}
