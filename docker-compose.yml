@@ -10,6 +10,34 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    networks:
+      - thesis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: thesis-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATA_MODE=MOCK
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - thesis-network
+
+networks:
+  thesis-network:
+    driver: bridge
 
 volumes:
   redis_data:
