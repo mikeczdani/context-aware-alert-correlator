@@ -40,9 +40,7 @@ The system is built on a 5-layer event-driven architecture:
 | Storage | Redis (AOF) | TTL correlation window, NoSQL incident store, Pub/Sub |
 | Alert Input | HTTP Webhook | Event-driven — Prometheus Alertmanager (or the chaos runner) pushes alerts |
 | Real-time Output | SSE (Server-Sent Events) | Push notifications to React without polling |
-| Frontend | React 19 + Vite + TanStack Query | Incident dashboard, live metrics and timeline |
-
-> **Note:** `reactflow` is listed as a frontend dependency and an interactive topology graph (`ServiceGraph`) is planned, but it is **not yet implemented**. The "Network Response Matrix" panel on the dashboard is currently an empty placeholder. See [Current Status](#current-status).
+| Frontend | React 19 + Vite + TanStack Query + React Flow | Incident dashboard, interactive topology graph, live metrics and timeline |
 
 ## Project Structure
 
@@ -54,7 +52,7 @@ context-aware-alert-correlator/
 ├── kontextusalap_hibafelismer_rendszer_architekt_ra.md   # Thesis architecture design doc (HU)
 ├── backend/
 │   ├── Dockerfile              # python:3.11-slim, uvicorn on :8000
-│   ├── requirements.txt        # ⚠ currently EMPTY — see Getting Started
+│   ├── requirements.txt        # fastapi, uvicorn, pydantic, redis, networkx, numpy, scipy, httpx
 │   ├── scenarios/              # Synthetic Kiali + K8s + alert JSON scenarios
 │   │   ├── 00_healthy_baseline.json
 │   │   ├── 01_pod_restart_noise.json
@@ -86,6 +84,7 @@ context-aware-alert-correlator/
 │           ├── window_store.py      # 60s TTL sliding correlation window
 │           └── incident_store.py    # Persistent incident store + ARR counters (HINCRBY)
 └── frontend/
+    ├── vite.config.ts                       # Vite config + dev proxy (/api → backend :8000)
     └── src/
         ├── main.tsx
         ├── App.tsx                          # QueryClientProvider + SSE listener
@@ -97,6 +96,7 @@ context-aware-alert-correlator/
         └── components/
             ├── ui/AppHeader.tsx             # Logo + scenario trigger buttons + Reset
             ├── ui/Panel.tsx                 # Reusable panel wrapper
+            ├── topology/ServiceGraph.tsx    # React Flow topology graph (status-colored nodes)
             ├── incidents/IncidentFeed.tsx   # Correlated incident cards (used as the terminal/feed)
             ├── metrics/SystemVitals.tsx     # Raw / Suppressed / Correlated / ARR vital cards
             ├── metrics/AlertTimeline.tsx    # Time-bucketed 60s sliding-window alert chart
@@ -151,8 +151,6 @@ docker compose up -d
 
 ### 2. Set up the backend
 
-> ⚠ `backend/requirements.txt` is currently empty. Until it is populated, install the dependencies explicitly:
-
 ```bash
 cd backend
 python -m venv venv
@@ -161,9 +159,10 @@ python -m venv venv
 # macOS / Linux:
 # source venv/bin/activate
 
-pip install fastapi uvicorn[standard] "redis>=5" networkx httpx pydantic pydantic-settings sse-starlette
-# (then freeze into requirements.txt: pip freeze > requirements.txt)
+pip install -r requirements.txt
 ```
+
+> `requirements.txt` pins FastAPI, Uvicorn, Pydantic (+ pydantic-settings), the async Redis client, NetworkX, and **NumPy + SciPy** (required by NetworkX's PageRank backend used in `severity_scorer.py`), plus HTTPX for the Kiali collector and the chaos runner.
 
 Create a `.env` file in `backend/` (all values shown are the defaults):
 
@@ -195,7 +194,7 @@ npm run dev
 
 Dashboard available at `http://localhost:5173` (Vite default).
 
-> **Dev proxy not configured.** The frontend calls relative `/api/v1/...` URLs, but `vite.config.ts` does not yet define a `server.proxy` to the backend on `:8000`. Until that is added, the SSE stream and REST calls will hit the Vite dev server instead of the backend. Add a proxy in `vite.config.ts`, or serve the built frontend behind the backend.
+> **Dev proxy.** The frontend calls relative `/api/v1/...` URLs and opens an SSE stream. `vite.config.ts` proxies everything under `/api` to the backend (default `http://localhost:8000`), so there is no CORS setup needed in dev. Override the target with the `VITE_API_TARGET` env var if the backend runs elsewhere (e.g. `VITE_API_TARGET=http://localhost:8000 npm run dev`).
 
 ### 4. Replay scenarios with the chaos runner (optional)
 
@@ -235,13 +234,14 @@ Switch modes by setting `DATA_MODE=LIVE` in `.env`.
 Implemented and working:
 
 - Full backend: schemas, collectors (mock mode), noise filter, NetworkX correlation + RCA, PageRank severity scoring, Redis storage (TTL window, incident store, ARR counters), all API endpoints, SSE stream.
+- Pinned `backend/requirements.txt` (incl. NumPy + SciPy for PageRank) and a working Docker build.
 - `chaos_runner.py` CLI scenario replay.
-- Frontend: SSE-driven live updates, `IncidentFeed`, `SystemVitals`, and a time-bucketed `AlertTimeline`.
+- Frontend: SSE-driven live updates, the **React Flow `ServiceGraph`** (status-colored topology in the "Network Response Matrix" panel), `IncidentFeed`, `SystemVitals`, and a time-bucketed `AlertTimeline`.
+- Vite dev proxy (`/api` → backend) configured in `vite.config.ts`.
 
 Not yet implemented / known gaps:
 
-- **Interactive topology graph (`ServiceGraph` with React Flow)** — the "Network Response Matrix" panel is an empty placeholder.
-- **`backend/requirements.txt` is empty** — dependencies must be installed manually (see above).
-- **Vite dev proxy** to the backend is not configured.
 - `config.WINDOW_TTL` exists but is not read by `window_store.py`, which hardcodes a 60s TTL constant.
 - `resolved` Alertmanager events are accepted but not processed (only `firing` alerts are handled).
+- `ArrStatsCards` exists but is not mounted; the dashboard uses `SystemVitals` for the ARR cards instead.
+- `LIVE` mode (real Kiali + Kubernetes) is implemented in the collectors but has not been validated against a real cluster.
