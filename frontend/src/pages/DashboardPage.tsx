@@ -3,9 +3,8 @@ import Panel from '../components/ui/Panel'
 import SystemVitals from '../components/metrics/SystemVitals'
 import IncidentFeed from '../components/incidents/IncidentFeed'
 import AlertTimeline from '../components/metrics/AlertTimeline'
+import ServiceGraph from '../components/topology/ServiceGraph'
 import styles from './DashboardPage.module.css'
-
-// ServiceGraph és további komponensek a következő fázisokban kerülnek ide
 
 export default function DashboardPage() {
   return (
@@ -16,7 +15,7 @@ export default function DashboardPage() {
         {/* Bal oszlop: Gráf + Terminál */}
         <div className={styles.heroSection}>
           <Panel title="Network Response Matrix" badge="REDIS + NETWORKX">
-            {/* ServiceGraph komponens ide kerül a 3. lépésben */}
+            <ServiceGraph />
           </Panel>
 
           <Panel title="Terminal // SSE Stream & Audit" badge="LIVE SYNC" badgeColor="var(--accent-purple)">
