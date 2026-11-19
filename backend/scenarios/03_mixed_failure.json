@@ -1,7 +1,7 @@
 {
-  "_comment": "Kombinált hibavihar – Ez a legkomplexebb forgatókönyv, amely egyszerre tartalmaz zajt és valódi incidenseket. Az 'auth' service podjai skálázódnak (HPA esemény, desired=4 de ready=2 még), ami átmeneti 503-as hibákat okoz – ezt a zajszűrőnek SUPPRESSED_SCALING-ként kell kezelnie. Ugyanakkor a 'db' service valóban hibás (nem skálázódás, nem restart okozza), ami lépcsőzetesen érinti a payment-et és az inventory-t. Az RCA algoritmusa tehát egyszerre kell: (1) elnyomja az auth zajt, és (2) azonosítsa a db-t ROOT_CAUSE-ként a payment+inventory SYMPTOM-okkal. Ez demonstrálja a rendszer legfontosabb képességét: valós és zaj riasztások szétválasztását egyidejűleg.",
+  "_comment": "Összetett hibavihar – 13 szolgáltatás, 12 aktív riasztás, egyszerre HÁROM egymástól független valódi hiba és HÁROM különböző zajforrás. (1) A 'db-main' összeomlik, ez lépcsőzetesen érinti a payment-et és az inventory-t (rombusz-függés), onnan az order-t. (2) A 'search-index' hibás (38%, épp a kemény küszöb alatt, de nincs K8s magyarázat), ez lassítja a 'search'-öt. (3) A 'shipping' skálázódik ÉS 46% a hibaarány – a kemény küszöb (40%) miatt ez NEM zaj, hiába zajlik skálázódás. Zajok: 'auth' (aktív HPA skálázódás), 'catalog' (a pod-ok már készen vannak, de 62 mp-e volt skálázási esemény, a 90 mp-es ablakon belül), 'notification' (2 újraindulás). Csapdák: az 'api-gateway' NEM riaszt (küszöb alatt marad), különben összekötné a független csoportokat; a 'cache' közös, egészséges függőség (az inventory, a catalog és a search is hívja) – nem vonhatja össze a csoportokat; a 'db-main' és a 'shipping' két-két riasztást küld (a zajszűrő szolgáltatásonként dedupol); a 'message-queue' egy már megszűnt (resolved) riasztása nem dolgozódhat fel. Az 'order' vegyes helyzet: van valódi (payment, inventory) és elnyomott (notification) függősége is, az előbbi miatt SYMPTOM marad.",
   "scenario_id": "mixed_storm",
-  "description": "auth scaling noise + real db failure happening simultaneously",
+  "description": "complex storm: 3 independent real failures (db-main cascade, search-index cascade, shipping) + 3 noise sources (scaling, recent scaling, restart) across a 13-service topology",
   "kiali_graph": {
     "namespace": "default",
     "nodes": [
@@ -9,64 +9,136 @@
         "id": "node-api-gateway",
         "service": "api-gateway",
         "namespace": "default",
-        "response_time_ms": 760.0,
-        "http_error_rate": 0.11,
-        "traffic_rate_rps": 120.0
+        "response_time_ms": 310.0,
+        "http_error_rate": 0.04,
+        "traffic_rate_rps": 400.0,
+        "_comment": "Nem riaszt: a hibaarány és a válaszidő a riasztási küszöb alatt marad (újrapróbálkozás / fallback). Ha riasztana, a független hibacsoportokat egyetlen csoportba kötné."
       },
       {
         "id": "node-auth",
         "service": "auth",
         "namespace": "default",
-        "response_time_ms": 420.0,
+        "response_time_ms": 410.0,
         "http_error_rate": 0.08,
-        "traffic_rate_rps": 95.0,
-        "_comment": "Látszólag hibás, de valójában HPA skálázódás okozza az átmeneti 503-okat"
+        "traffic_rate_rps": 140.0,
+        "_comment": "HPA skálázódás zajlik (desired=4, ready=2) – SUPPRESSED_SCALING"
+      },
+      {
+        "id": "node-catalog",
+        "service": "catalog",
+        "namespace": "default",
+        "response_time_ms": 680.0,
+        "http_error_rate": 0.06,
+        "traffic_rate_rps": 100.0,
+        "_comment": "A podok készen állnak, de a skálázási esemény 62 mp-e volt (<= 90 mp) – SUPPRESSED_SCALING a 'recent scale' ágon"
+      },
+      {
+        "id": "node-search",
+        "service": "search",
+        "namespace": "default",
+        "response_time_ms": 2400.0,
+        "http_error_rate": 0.14,
+        "traffic_rate_rps": 80.0
+      },
+      {
+        "id": "node-search-index",
+        "service": "search-index",
+        "namespace": "default",
+        "response_time_ms": 3100.0,
+        "http_error_rate": 0.38,
+        "traffic_rate_rps": 75.0,
+        "_comment": "38% – a 40%-os kemény küszöb alatt, de K8s-esemény nincs, így valódi hiba. Második gyökérok."
       },
       {
         "id": "node-order",
         "service": "order",
         "namespace": "default",
-        "response_time_ms": 790.0,
-        "http_error_rate": 0.10,
-        "traffic_rate_rps": 80.0
+        "response_time_ms": 1900.0,
+        "http_error_rate": 0.11,
+        "traffic_rate_rps": 60.0
       },
       {
         "id": "node-payment",
         "service": "payment",
         "namespace": "default",
-        "response_time_ms": 1600.0,
-        "http_error_rate": 0.19,
-        "traffic_rate_rps": 40.0
+        "response_time_ms": 2100.0,
+        "http_error_rate": 0.24,
+        "traffic_rate_rps": 45.0
       },
       {
         "id": "node-inventory",
         "service": "inventory",
         "namespace": "default",
-        "response_time_ms": 1500.0,
-        "http_error_rate": 0.16,
+        "response_time_ms": 1700.0,
+        "http_error_rate": 0.17,
         "traffic_rate_rps": 55.0
       },
       {
-        "id": "node-db",
-        "service": "db",
+        "id": "node-shipping",
+        "service": "shipping",
         "namespace": "default",
-        "response_time_ms": 4100.0,
-        "http_error_rate": 0.28,
-        "traffic_rate_rps": 90.0,
-        "_comment": "A db valóban hibás – nem skálázódik, nem indult újra, ez a valódi gyökérok"
+        "response_time_ms": 1200.0,
+        "http_error_rate": 0.46,
+        "traffic_rate_rps": 20.0,
+        "_comment": "Skálázódik ÉS 46% a hibaarány. A kemény küszöb (>= 40%) felülírja a skálázási zajszabályt – valódi hiba. Harmadik gyökérok, következmények nélkül."
+      },
+      {
+        "id": "node-notification",
+        "service": "notification",
+        "namespace": "default",
+        "response_time_ms": 520.0,
+        "http_error_rate": 0.12,
+        "traffic_rate_rps": 30.0,
+        "_comment": "2 újraindulás az elmúlt percben – SUPPRESSED_RESTART"
+      },
+      {
+        "id": "node-message-queue",
+        "service": "message-queue",
+        "namespace": "default",
+        "response_time_ms": 8.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 50.0
+      },
+      {
+        "id": "node-cache",
+        "service": "cache",
+        "namespace": "default",
+        "response_time_ms": 3.0,
+        "http_error_rate": 0.0,
+        "traffic_rate_rps": 145.0,
+        "_comment": "Egészséges, közös függőség. Nem riaszt, ezért nem köti össze az inventory / catalog / search csoportjait."
+      },
+      {
+        "id": "node-db-main",
+        "service": "db-main",
+        "namespace": "default",
+        "response_time_ms": 5200.0,
+        "http_error_rate": 0.31,
+        "traffic_rate_rps": 95.0,
+        "_comment": "Első gyökérok: a payment és az inventory is erre épít"
       }
     ],
     "edges": [
-      { "id": "edge-1", "source": "node-api-gateway", "target": "node-auth",      "traffic_rate_rps": 95.0 },
-      { "id": "edge-2", "source": "node-api-gateway", "target": "node-order",     "traffic_rate_rps": 80.0 },
-      { "id": "edge-3", "source": "node-order",       "target": "node-payment",   "traffic_rate_rps": 40.0 },
-      { "id": "edge-4", "source": "node-order",       "target": "node-inventory", "traffic_rate_rps": 55.0 },
-      { "id": "edge-5", "source": "node-payment",     "target": "node-db",        "traffic_rate_rps": 40.0 },
-      { "id": "edge-6", "source": "node-inventory",   "target": "node-db",        "traffic_rate_rps": 50.0 }
+      { "id": "edge-1",  "source": "node-api-gateway", "target": "node-auth",          "traffic_rate_rps": 140.0 },
+      { "id": "edge-2",  "source": "node-api-gateway", "target": "node-catalog",       "traffic_rate_rps": 100.0 },
+      { "id": "edge-3",  "source": "node-api-gateway", "target": "node-search",        "traffic_rate_rps": 80.0 },
+      { "id": "edge-4",  "source": "node-api-gateway", "target": "node-order",         "traffic_rate_rps": 60.0 },
+      { "id": "edge-5",  "source": "node-api-gateway", "target": "node-shipping",      "traffic_rate_rps": 20.0 },
+      { "id": "edge-6",  "source": "node-order",       "target": "node-payment",       "traffic_rate_rps": 45.0 },
+      { "id": "edge-7",  "source": "node-order",       "target": "node-inventory",     "traffic_rate_rps": 55.0 },
+      { "id": "edge-8",  "source": "node-order",       "target": "node-notification",  "traffic_rate_rps": 30.0 },
+      { "id": "edge-9",  "source": "node-payment",     "target": "node-db-main",       "traffic_rate_rps": 45.0 },
+      { "id": "edge-10", "source": "node-inventory",   "target": "node-db-main",       "traffic_rate_rps": 50.0 },
+      { "id": "edge-11", "source": "node-inventory",   "target": "node-cache",         "traffic_rate_rps": 40.0 },
+      { "id": "edge-12", "source": "node-catalog",     "target": "node-cache",         "traffic_rate_rps": 70.0 },
+      { "id": "edge-13", "source": "node-search",      "target": "node-cache",         "traffic_rate_rps": 35.0 },
+      { "id": "edge-14", "source": "node-search",      "target": "node-search-index",  "traffic_rate_rps": 75.0 },
+      { "id": "edge-15", "source": "node-shipping",    "target": "node-message-queue", "traffic_rate_rps": 20.0 },
+      { "id": "edge-16", "source": "node-notification","target": "node-message-queue", "traffic_rate_rps": 30.0 }
     ]
   },
   "k8s_contexts": [
-    { "service": "api-gateway", "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "api-gateway",   "desired_replicas": 3, "ready_replicas": 3, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
     {
       "service": "auth",
       "desired_replicas": 4,
@@ -74,12 +146,43 @@
       "restarts_last_minute": 0,
       "is_scaling": true,
       "last_scale_event_age_seconds": 35.0,
-      "_comment": "HPA skálázódás: desired=4, ready=2 még – az átmeneti hibák SUPPRESSED_SCALING-ot kapnak"
+      "_comment": "Aktív HPA skálázódás: desired=4, ready=2"
     },
-    { "service": "order",     "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
-    { "service": "payment",   "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
-    { "service": "inventory", "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
-    { "service": "db",        "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 }
+    {
+      "service": "catalog",
+      "desired_replicas": 3,
+      "ready_replicas": 3,
+      "restarts_last_minute": 0,
+      "is_scaling": false,
+      "last_scale_event_age_seconds": 62.0,
+      "_comment": "Nem skálázódik már, de az utolsó skálázási esemény 62 mp-e volt – a 90 mp-es ablakon belül"
+    },
+    { "service": "search",        "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "search-index",  "desired_replicas": 3, "ready_replicas": 3, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "order",         "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "payment",       "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "inventory",     "desired_replicas": 2, "ready_replicas": 2, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    {
+      "service": "shipping",
+      "desired_replicas": 3,
+      "ready_replicas": 1,
+      "restarts_last_minute": 0,
+      "is_scaling": true,
+      "last_scale_event_age_seconds": 20.0,
+      "_comment": "Skálázódik, de a 46% hibaarány miatt a zajszűrő nem nyomja el"
+    },
+    {
+      "service": "notification",
+      "desired_replicas": 1,
+      "ready_replicas": 1,
+      "restarts_last_minute": 2,
+      "is_scaling": false,
+      "last_scale_event_age_seconds": 999.0,
+      "_comment": "2 újraindulás az elmúlt percben"
+    },
+    { "service": "message-queue", "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "cache",         "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 },
+    { "service": "db-main",       "desired_replicas": 1, "ready_replicas": 1, "restarts_last_minute": 0, "is_scaling": false, "last_scale_event_age_seconds": 999.0 }
   ],
   "alerts": [
     {
@@ -93,12 +196,30 @@
     },
     {
       "alertname": "HighLatency",
-      "service": "db",
+      "service": "db-main",
       "namespace": "default",
       "severity": "critical",
       "status": "firing",
-      "labels": { "job": "db-svc", "env": "production" },
-      "annotations": { "summary": "db p99 response time 4100ms (threshold: 500ms)" }
+      "labels": { "job": "db-main-svc", "env": "production" },
+      "annotations": { "summary": "db-main p99 response time 5200ms (threshold: 500ms)" }
+    },
+    {
+      "alertname": "HighErrorRate",
+      "service": "shipping",
+      "namespace": "default",
+      "severity": "critical",
+      "status": "firing",
+      "labels": { "job": "shipping-svc", "env": "production" },
+      "annotations": { "summary": "shipping HTTP error rate 46% (threshold: 5%) – HPA scale-out in progress, but error rate is too high to be transient" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "catalog",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "catalog-svc", "env": "production" },
+      "annotations": { "summary": "catalog p99 latency 680ms (threshold: 500ms) – scale event 62s ago" }
     },
     {
       "alertname": "HighErrorRate",
@@ -107,7 +228,25 @@
       "severity": "critical",
       "status": "firing",
       "labels": { "job": "payment-svc", "env": "production" },
-      "annotations": { "summary": "payment HTTP error rate 19% – upstream db timeout" }
+      "annotations": { "summary": "payment HTTP error rate 24% – upstream db-main timeout" }
+    },
+    {
+      "alertname": "HighErrorRate",
+      "service": "search-index",
+      "namespace": "default",
+      "severity": "critical",
+      "status": "firing",
+      "labels": { "job": "search-index-svc", "env": "production" },
+      "annotations": { "summary": "search-index HTTP error rate 38% (threshold: 5%)" }
+    },
+    {
+      "alertname": "ConnectionPoolExhausted",
+      "service": "db-main",
+      "namespace": "default",
+      "severity": "critical",
+      "status": "firing",
+      "labels": { "job": "db-main-svc", "env": "production" },
+      "annotations": { "summary": "db-main connection pool at 100% – new connections are rejected" }
     },
     {
       "alertname": "HighErrorRate",
@@ -116,7 +255,25 @@
       "severity": "warning",
       "status": "firing",
       "labels": { "job": "inventory-svc", "env": "production" },
-      "annotations": { "summary": "inventory HTTP error rate 16% – upstream db timeout" }
+      "annotations": { "summary": "inventory HTTP error rate 17% – upstream db-main timeout" }
+    },
+    {
+      "alertname": "HighErrorRate",
+      "service": "notification",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "notification-svc", "env": "production" },
+      "annotations": { "summary": "notification HTTP error rate 12% – container restarted 2x in the last minute" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "search",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "firing",
+      "labels": { "job": "search-svc", "env": "production" },
+      "annotations": { "summary": "search p99 latency 2400ms – upstream search-index degraded" }
     },
     {
       "alertname": "HighLatency",
@@ -125,27 +282,56 @@
       "severity": "warning",
       "status": "firing",
       "labels": { "job": "order-svc", "env": "production" },
-      "annotations": { "summary": "order p99 latency 790ms – payment and inventory degraded" }
+      "annotations": { "summary": "order p99 latency 1900ms – payment and inventory degraded" }
     },
     {
-      "alertname": "HighLatency",
-      "service": "api-gateway",
+      "alertname": "ReplicasNotReady",
+      "service": "shipping",
       "namespace": "default",
       "severity": "warning",
       "status": "firing",
-      "labels": { "job": "api-gateway-svc", "env": "production" },
-      "annotations": { "summary": "api-gateway p99 latency 760ms – auth scaling + order degraded" }
+      "labels": { "job": "shipping-svc", "env": "production" },
+      "annotations": { "summary": "shipping has 1 of 3 replicas ready" }
+    },
+    {
+      "alertname": "HighLatency",
+      "service": "message-queue",
+      "namespace": "default",
+      "severity": "warning",
+      "status": "resolved",
+      "labels": { "job": "message-queue-svc", "env": "production" },
+      "annotations": { "summary": "message-queue latency spike has ended – resolved alerts must be ignored" },
+      "_comment": "Megszűnt riasztás: a feldolgozás csak a 'firing' státuszúakat veszi figyelembe"
     }
   ],
   "expected_outcome": {
-    "suppressed": ["auth"],
-    "root_cause": "db",
-    "symptoms": ["payment", "inventory", "order", "api-gateway"],
+    "_comment": "A várt kimenet a JELENLEGI motor logikájából (noise_filter + graph_correlator) kézzel levezetve, nem futtatással igazolva.",
+    "suppressed": {
+      "auth": "SUPPRESSED_SCALING",
+      "catalog": "SUPPRESSED_SCALING",
+      "notification": "SUPPRESSED_RESTART"
+    },
+    "groups": [
+      {
+        "root_cause": "db-main",
+        "symptoms": ["payment", "inventory", "order"]
+      },
+      {
+        "root_cause": "search-index",
+        "symptoms": ["search"]
+      },
+      {
+        "root_cause": "shipping",
+        "symptoms": []
+      }
+    ],
+    "not_alerting": ["api-gateway", "cache", "message-queue"],
+    "ignored_resolved_alerts": 1,
     "incident_count": 1,
-    "raw_alert_count": 6,
-    "suppressed_count": 1,
-    "correlated_count": 1,
-    "arr_pct": 83.3,
-    "reason": "auth alert suppressed (HPA scale-out, is_scaling=true, last_scale_event 35s ago). db is the real root cause – deepest downstream node, no K8s event, highest error rate."
+    "raw_alert_count": 12,
+    "suppressed_count": 3,
+    "correlated_count": 7,
+    "arr_pct": 91.67,
+    "reason": "Három független gyökérok (db-main, search-index, shipping) három külön csoportban; az elnyomás szolgáltatás szintű (auth, catalog, notification), a kemény küszöb miatt a skálázódó shipping valódi hiba marad. A motor egyetlen CorrelatedIncident-et hoz létre, ezért az ARR számláló 1 korrelált incidenst számol."
   }
 }
