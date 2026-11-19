@@ -1,156 +1,230 @@
-.feed {
+/* ---------------------------------------------------------------------------
+   Terminál doboz – a HTML .terminal-brutal mintájára
+   --------------------------------------------------------------------------- */
+.terminal {
+  background: #010302;
+  border: 1px solid var(--card-border);
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  max-height: 420px;
   overflow-y: auto;
-  max-height: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--card-border) transparent;
 }
 
-.empty {
-  color: #64748b;
-  font-size: 14px;
-  padding: 32px 16px;
-  text-align: center;
+.terminal::-webkit-scrollbar {
+  width: 6px;
 }
 
-.loading {
-  color: #64748b;
-  font-size: 14px;
-  padding: 16px;
+.terminal::-webkit-scrollbar-thumb {
+  background: var(--card-border);
 }
 
-/* Incidens kártya */
-.card {
-  background: #1e293b;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  overflow: hidden;
-  border: 1px solid #334155;
+/* Rendszerüzenetek (betöltés, üres állapot) */
+.system {
+  color: var(--accent-neon);
+  padding: 8px 0;
 }
 
-.cardHeader {
+.cursor {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cursor {
+    animation: blink 1s steps(2, start) infinite;
+  }
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Incidens bejegyzés (naplósor)
+   --------------------------------------------------------------------------- */
+.entry {
+  border-left: 2px solid var(--card-border);
+  border-bottom: 1px dashed var(--card-border);
+  margin: 4px 0;
+}
+
+.entry:last-child {
+  border-bottom: none;
+}
+
+/* A bal szegély színe jelzi az incidens állapotát */
+.entry--OPEN       { border-left-color: var(--danger); }
+.entry--SUPPRESSED { border-left-color: var(--warning); }
+.entry--RESOLVED   { border-left-color: var(--accent-neon); }
+
+.entryHeader {
   width: 100%;
-  background: none;
+  background: transparent;
   border: none;
-  cursor: pointer;
-  padding: 14px 16px;
+  color: var(--text-main);
+  font: inherit;
   text-align: left;
+  cursor: pointer;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  transition: background 0.2s;
 }
 
-.cardHeader:hover {
-  background: #263144;
+.entryHeader:hover {
+  background: rgba(0, 255, 102, 0.04);
 }
 
-.headerTop {
+.entryHeader:focus-visible {
+  outline: 1px solid var(--accent-neon);
+  outline-offset: -1px;
+}
+
+.line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.rootCause {
-  color: #ef4444;
-  font-weight: 600;
-  font-size: 14px;
+.time {
+  color: var(--text-dimmed);
 }
 
-.timestamp {
-  color: #64748b;
-  font-size: 12px;
+.rootCause {
+  color: var(--danger);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.toggle {
   margin-left: auto;
+  color: var(--accent-neon);
 }
 
 .summary {
-  color: #94a3b8;
-  font-size: 13px;
-  margin: 0;
+  color: var(--text-main);
+}
+
+.prompt {
+  color: var(--accent-neon);
 }
 
 .counters {
   display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #64748b;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--text-dimmed);
+  font-size: 0.7rem;
+  text-transform: uppercase;
 }
 
-.expandHint {
-  margin-left: auto;
-  color: #475569;
+.counters b {
+  color: var(--text-main);
 }
 
-/* Lenyitható részletek */
+/* ---------------------------------------------------------------------------
+   Lenyitott részletek – érintett csomópontok
+   --------------------------------------------------------------------------- */
 .details {
-  border-top: 1px solid #334155;
-  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 4px 12px 12px 24px;
 }
 
-/* Érintett csomópont sor */
+/* A csomópont sor a ServiceGraph node-brutal dobozára hasonlít */
 .node {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   padding: 8px 12px;
-  background: #0f172a;
-  border-radius: 6px;
+  background: rgba(0, 255, 102, 0.02);
+  border: 1px solid var(--card-border);
+  border-left: 2px solid var(--accent-neon);
 }
 
-.node--ROOT_CAUSE        { border-left: 3px solid #ef4444; }
-.node--SYMPTOM           { border-left: 3px solid #f59e0b; }
-.node--HEALTHY           { border-left: 3px solid #22c55e; }
-.node--SUPPRESSED        { border-left: 3px solid #64748b; }
-.node--SUPPRESSED_SCALING { border-left: 3px solid #3b82f6; }
-.node--SUPPRESSED_RESTART { border-left: 3px solid #8b5cf6; }
+.node--ROOT_CAUSE         { border-left-color: var(--danger); }
+.node--SYMPTOM            { border-left-color: var(--warning); }
+.node--SUPPRESSED,
+.node--SUPPRESSED_SCALING,
+.node--SUPPRESSED_RESTART { border-left-color: var(--warning); border-left-style: dashed; }
 
 .nodeHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .nodeName {
-  color: #f1f5f9;
-  font-weight: 600;
-  font-size: 13px;
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 0.8rem;
 }
 
 .nodeScore {
-  color: #64748b;
-  font-size: 12px;
   margin-left: auto;
+  color: var(--text-dimmed);
+  font-size: 0.7rem;
 }
 
 .nodeMetrics {
   display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #64748b;
+  gap: 16px;
+  color: var(--text-dimmed);
+  font-size: 0.7rem;
 }
 
-.suppressionReason {
-  color: #94a3b8;
-  font-size: 12px;
-  margin: 0;
-  font-style: italic;
+/* Az indoklás kommentként jelenik meg, mint egy kódsor */
+.reason {
+  color: var(--text-dimmed);
+  font-size: 0.7rem;
+  margin: 2px 0 0;
 }
 
-/* Status badge-ek */
-.badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  color: #fff;
+/* ---------------------------------------------------------------------------
+   Státusz-címkék (incidens és csomópont egyaránt)
+   --------------------------------------------------------------------------- */
+.tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  white-space: nowrap;
 }
 
-.badge--OPEN              { background: #ef4444; }
-.badge--SUPPRESSED        { background: #64748b; }
-.badge--RESOLVED          { background: #22c55e; }
+.tag--OPEN,
+.tag--ROOT_CAUSE {
+  color: var(--danger);
+  border-color: var(--danger);
+}
 
-.badge--HEALTHY           { background: #22c55e; }
-.badge--ROOT_CAUSE        { background: #ef4444; }
-.badge--SYMPTOM           { background: #f59e0b; }
-.badge--SUPPRESSED_SCALING { background: #3b82f6; }
-.badge--SUPPRESSED_RESTART { background: #8b5cf6; }
+.tag--SYMPTOM,
+.tag--SUPPRESSED {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* Az elnyomott csomópontok szaggatott kerete megegyezik a gráf jelölésével */
+.tag--SUPPRESSED_SCALING,
+.tag--SUPPRESSED_RESTART {
+  color: var(--warning);
+  border-color: var(--warning);
+  border-style: dashed;
+}
+
+.tag--RESOLVED,
+.tag--HEALTHY {
+  color: var(--accent-neon);
+  border-color: var(--accent-neon);
+}

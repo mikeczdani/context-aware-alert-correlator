@@ -1,8 +1,9 @@
 /**
- * components/incidents/IncidentFeed.tsx – Korrelált incidens kártyák listája
+ * components/incidents/IncidentFeed.tsx – Korrelált incidensek terminál-stílusú naplója
  *
- * Minden incidens egy lenyitható kártyaként jelenik meg:
- *   - Fejléc: státusz badge, root cause service, időbélyeg, összefoglaló
+ * A "Terminal // SSE Stream & Audit" panel tartalma. Minden incidens egy
+ * naplóbejegyzés, amely lenyitható:
+ *   - Fejléc: időbélyeg, státusz-címke, root cause, összefoglaló, számlálók
  *   - Lenyitva: érintett csomópontok státusszal, metrikákkal és indoklással
  */
 
@@ -11,75 +12,86 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchIncidents } from '../../api/incidentsApi'
 import { QUERY_KEYS } from '../../hooks/useSSEStream'
 import type { AffectedNode, CorrelatedIncident, NodeStatus } from '../../types/api'
+import { parseUtc } from '../../utils/time'
 import styles from './IncidentFeed.module.css'
 
 // ---------------------------------------------------------------------------
-// Badge komponensek
+// Címkék
 // ---------------------------------------------------------------------------
 
-function IncidentStatusBadge({ status }: { status: string }) {
+function IncidentStatusTag({ status }: { status: string }) {
   return (
-    <span className={`${styles.badge} ${styles[`badge--${status}`]}`}>
+    <span className={`${styles.tag} ${styles[`tag--${status}`]}`}>
       {status}
     </span>
   )
 }
 
-function NodeStatusBadge({ status }: { status: NodeStatus }) {
+function NodeStatusTag({ status }: { status: NodeStatus }) {
   return (
-    <span className={`${styles.badge} ${styles[`badge--${status}`]}`}>
+    <span className={`${styles.tag} ${styles[`tag--${status}`]}`}>
       {status.replace(/_/g, ' ')}
     </span>
   )
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleTimeString('hu-HU', {
+/**
+ * HH:MM:SS formátum 24 órás idővel, a felhasználó helyi időzónájában.
+ * A created_at időzóna-jelző nélküli UTC, ezért a parseUtc-t használjuk –
+ * a sima new Date(iso) helyi időként értelmezné, és eltolódna.
+ */
+function formatTime(iso: string): string {
+  return new Date(parseUtc(iso)).toLocaleTimeString('hu-HU', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    hour12: false,
   })
 }
 
 // ---------------------------------------------------------------------------
-// Egyetlen incidens kártya
+// Egyetlen incidens bejegyzés
 // ---------------------------------------------------------------------------
 
-function IncidentCard({ incident }: { incident: CorrelatedIncident }) {
+function IncidentEntry({ incident }: { incident: CorrelatedIncident }) {
   const [expanded, setExpanded] = useState(false)
+  const detailsId = `incident-details-${incident.id}`
 
   return (
-    <div className={styles.card}>
+    <div className={`${styles.entry} ${styles[`entry--${incident.status}`]}`}>
       <button
-        className={styles.cardHeader}
+        type="button"
+        className={styles.entryHeader}
         onClick={() => setExpanded(prev => !prev)}
+        aria-expanded={expanded}
+        aria-controls={detailsId}
       >
-        <div className={styles.headerTop}>
-          <IncidentStatusBadge status={incident.status} />
+        <span className={styles.line}>
+          <span className={styles.time}>[{formatTime(incident.created_at)}]</span>
+          <IncidentStatusTag status={incident.status} />
           {incident.root_cause_service && (
             <span className={styles.rootCause}>
-              Root cause: {incident.root_cause_service}
+              ROOT CAUSE: {incident.root_cause_service}
             </span>
           )}
-          <span className={styles.timestamp}>
-            {formatDate(incident.created_at)}
+          <span className={styles.toggle} aria-hidden="true">
+            {expanded ? '[−]' : '[+]'}
           </span>
-        </div>
+        </span>
 
-        <p className={styles.summary}>{incident.summary}</p>
+        <span className={styles.summary}>
+          <span className={styles.prompt}>&gt;</span> {incident.summary}
+        </span>
 
-        <div className={styles.counters}>
-          <span>🔔 {incident.raw_alert_count} raw</span>
-          <span>🔇 {incident.suppressed_count} suppressed</span>
-          <span>🔗 {incident.correlated_count} correlated</span>
-          <span className={styles.expandHint}>
-            {expanded ? '▲ collapse' : '▼ details'}
-          </span>
-        </div>
+        <span className={styles.counters}>
+          <span>RAW <b>{incident.raw_alert_count}</b></span>
+          <span>SUPPRESSED <b>{incident.suppressed_count}</b></span>
+          <span>CORRELATED <b>{incident.correlated_count}</b></span>
+        </span>
       </button>
 
       {expanded && (
-        <div className={styles.details}>
+        <div id={detailsId} className={styles.details}>
           {incident.affected_nodes.map((node: AffectedNode) => (
             <div
               key={node.service}
@@ -87,21 +99,19 @@ function IncidentCard({ incident }: { incident: CorrelatedIncident }) {
             >
               <div className={styles.nodeHeader}>
                 <span className={styles.nodeName}>{node.service}</span>
-                <NodeStatusBadge status={node.status} />
+                <NodeStatusTag status={node.status} />
                 <span className={styles.nodeScore}>
-                  score: {node.severity_score.toFixed(3)}
+                  SCORE {node.severity_score.toFixed(3)}
                 </span>
               </div>
 
               <div className={styles.nodeMetrics}>
-                <span>err: {(node.http_error_rate * 100).toFixed(1)}%</span>
-                <span>latency: {node.response_time_ms.toFixed(0)}ms</span>
+                <span>ERR {(node.http_error_rate * 100).toFixed(1)}%</span>
+                <span>LAT {node.response_time_ms.toFixed(0)}ms</span>
               </div>
 
               {node.suppression_reason && (
-                <p className={styles.suppressionReason}>
-                  💬 {node.suppression_reason}
-                </p>
+                <p className={styles.reason}>// {node.suppression_reason}</p>
               )}
             </div>
           ))}
@@ -122,21 +132,29 @@ export default function IncidentFeed() {
   })
 
   if (isLoading) {
-    return <div className={styles.loading}>Loading incidents...</div>
+    return (
+      <div className={styles.terminal}>
+        <p className={styles.system}>
+          &gt; LOADING INCIDENTS<span className={styles.cursor}>_</span>
+        </p>
+      </div>
+    )
   }
 
   if (!incidents || incidents.length === 0) {
     return (
-      <div className={styles.empty}>
-        No incidents yet. Run a simulation to get started.
+      <div className={styles.terminal}>
+        <p className={styles.system}>
+          &gt; NO INCIDENTS YET. RUN A SCENARIO<span className={styles.cursor}>_</span>
+        </p>
       </div>
     )
   }
 
   return (
-    <div className={styles.feed}>
+    <div className={styles.terminal}>
       {[...incidents].reverse().map(incident => (
-        <IncidentCard key={incident.id} incident={incident} />
+        <IncidentEntry key={incident.id} incident={incident} />
       ))}
     </div>
   )
