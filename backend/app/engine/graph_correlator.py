@@ -17,10 +17,20 @@ Az algoritmus lépései (a markdown 3. réteg leírása alapján):
   1. build_topology_graph(): Kiali JSON → NetworkX DiGraph
      Az élek iránya: caller → callee (pl. order → payment)
   2. filter_alerts_batch(): zajszűrés (noise_filter.py delegálva)
-  3. correlate(): a nem-zajnak minősült riasztó csomópontok közül megkeresi
+  3. _propagate_suppression(): az elnyomás továbbterjesztése a hívókra.
+     Ha egy csomópont összes riasztó downstream függősége elnyomott zaj, a
+     csomópont riasztása is csak ennek a zajnak a következménye (pl. az inventory
+     újraindul, ezért az order latenciája nő) → SUPPRESSED_DOWNSTREAM.
+  4. correlate(): a nem-zajnak minősült riasztó csomópontok közül megkeresi
      az összefüggőket (van-e hívási útvonal köztük), és csoportosítja őket.
-  4. find_root_cause(): a csoporton belül megkeresi a legmélyebb downstream
+  5. find_root_cause(): a csoporton belül megkeresi a legmélyebb downstream
      hibás csomópontot – ez a ROOT_CAUSE, a többiek SYMPTOM-ok.
+
+Determinizmus:
+  A szakdolgozati mérésekhez a kimenetnek ismételhetőnek kell lennie. A Python
+  sztring-halmazainak bejárási sorrendje folyamatonként változhat (hash-
+  randomizálás), ezért minden bejárás rendezett, és minden döntetlen
+  explicit szabállyal dől el (lásd a függvények leírását).
 
 Kimenet: CorrelatedIncident objektum, amelyet a webhook_routes.py ment el.
 """
@@ -31,7 +41,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
-from app.engine.noise_filter import filter_alerts_batch
+from app.engine.noise_filter import HARD_ERROR_THRESHOLD, filter_alerts_batch
 from app.engine.severity_scorer import score_incident
 from app.schemas.alert import RawAlert
 from app.schemas.incident import (
@@ -41,6 +51,16 @@ from app.schemas.incident import (
     NodeStatus,
 )
 from app.schemas.topology import KialiGraph, KialiNode, K8sContext
+
+
+# ---------------------------------------------------------------------------
+# Segédfüggvény
+# ---------------------------------------------------------------------------
+
+def _error_rate(node_map: Dict[str, KialiNode], service: str) -> float:
+    """A szolgáltatás Kiali hibaaránya, vagy 0.0, ha a Kiali nem ismeri."""
+    node = node_map.get(service)
+    return node.http_error_rate if node else 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +129,102 @@ def build_topology_graph(graph: KialiGraph) -> nx.DiGraph:
 
 
 # ---------------------------------------------------------------------------
-# 2. lépés: Összefüggő riasztó csomópontok azonosítása
+# 2/b lépés: az elnyomás továbbterjesztése a hívókra
+# ---------------------------------------------------------------------------
+
+def _propagate_suppression(
+    real_services: Set[str],
+    suppressed: Dict[str, Tuple[NodeStatus, str]],
+    graph: nx.DiGraph,
+    node_map: Dict[str, KialiNode],
+) -> Tuple[Set[str], Dict[str, Tuple[NodeStatus, str]]]:
+    """
+    A zajszűrő csak a csomópont SAJÁT K8s állapotát nézi. Ha az inventory újraindul,
+    az order latencia-riasztása is zaj – az order saját K8s állapota viszont rendben
+    van, ezért a szűrő valódi hibának tekintené, és (egyetlen valódi riasztóként)
+    hamis ROOT_CAUSE-ot csinálna belőle. Ez a lépés ezt javítja.
+
+    Szabály: egy valódinak ítélt csomópont (X) elnyomottá válik, ha MIND teljesül:
+      1. X hibaaránya a kemény küszöb (noise_filter.HARD_ERROR_THRESHOLD) alatt van.
+         (A kemény hibát a zajszűrő sem nyomja el, itt sem.)
+      2. X-nek van legalább egy riasztó downstream (tranzitív) függősége.
+      3. X MINDEN riasztó downstream függősége elnyomott. Ha van köztük valódi,
+         X annak a valódi hibának a következménye (SYMPTOM), nem zaj.
+      4. Védőfeltétel: X hibaaránya nem nagyobb, mint a legnagyobb hibaarányú
+         elnyomott downstream függőségé. A hiba felfelé a láncon jellemzően csillapodik;
+         ha a hívó rosszabb a forrásnál, valószínűleg saját problémája is van.
+         Ez heurisztika, a forgatókönyvek mintáját követi.
+
+    A szabályt fixpontig ismételjük, így a többlépéses láncok is jól működnek
+    (api-gateway → order → inventory[újraindul]: előbb az order, aztán a gateway
+    is elnyomott). A feltételek monotonok (az elnyomott halmaz csak nő), ezért a
+    végeredmény nem függ a feldolgozási sorrendtől.
+
+    Paraméterek:
+      real_services: a zajszűrés után valódinak ítélt riasztó szolgáltatások.
+      suppressed:    { service → (NodeStatus, indoklás) } a zajszűrő elnyomottjai.
+      graph:         a topológia DiGraph-ja (caller → callee).
+      node_map:      { service → KialiNode } a hibaarányokhoz.
+
+    Visszatér: (frissített valódi halmaz, frissített elnyomott szótár).
+    A bemeneti objektumokat nem módosítja.
+    """
+    real = set(real_services)
+    result = dict(suppressed)
+
+    changed = True
+    while changed:
+        changed = False
+        # Az összes riasztó szolgáltatás halmaza nem változik a körökben
+        # (csak a valódi → elnyomott átsorolás történik), ezért elég itt számolni.
+        alerting = real | set(result)
+
+        for service in sorted(real):
+            node = node_map.get(service)
+            if node is None or service not in graph:
+                continue
+
+            # 1. feltétel: a kemény hibát nem nyomjuk el
+            if node.http_error_rate >= HARD_ERROR_THRESHOLD:
+                continue
+
+            # 2. feltétel: van riasztó downstream függőség
+            downstream_alerting = nx.descendants(graph, service) & alerting
+            if not downstream_alerting:
+                continue
+
+            # 3. feltétel: nincs köztük valódi hiba
+            if downstream_alerting & real:
+                continue
+
+            # A legnagyobb hibaarányú elnyomott függőség a "forrás"
+            # (döntetlennél a névsorban első – determinisztikus).
+            source = max(
+                sorted(downstream_alerting),
+                key=lambda s: _error_rate(node_map, s),
+            )
+            source_rate = _error_rate(node_map, source)
+
+            # 4. feltétel (védőfeltétel)
+            if node.http_error_rate > source_rate:
+                continue
+
+            source_status = result[source][0]
+            reason = (
+                f"Alert on '{service}' is a downstream effect of suppressed "
+                f"'{source}' ({source_status.value}): all alerting dependencies "
+                f"of '{service}' are operational noise "
+                f"(error_rate={node.http_error_rate:.1%} <= {source_rate:.1%})."
+            )
+            result[service] = (NodeStatus.SUPPRESSED_DOWNSTREAM, reason)
+            real.discard(service)
+            changed = True
+
+    return real, result
+
+
+# ---------------------------------------------------------------------------
+# 3. lépés: Összefüggő riasztó csomópontok azonosítása
 # ---------------------------------------------------------------------------
 
 def _find_connected_alerting_nodes(
@@ -133,6 +248,10 @@ def _find_connected_alerting_nodes(
       általában kicsi (2–6 service), az O(n²) páronkénti ellenőrzés
       elfogadható teljesítményt nyújt.
 
+    Determinizmus:
+      A szolgáltatásokat névsorban dolgozza fel, és a csoportokat a legkisebb
+      tagjuk neve szerint rendezve adja vissza.
+
     Visszatér: csoportok listája, ahol minden csoport összefüggő
     riasztó szolgáltatások halmaza.
 
@@ -145,7 +264,7 @@ def _find_connected_alerting_nodes(
     if not alerting_services:
         return []
 
-    services = list(alerting_services)
+    services = sorted(alerting_services)
     # Union-Find: group_id[service] = csoport képviselő service neve
     group_id: Dict[str, str] = {s: s for s in services}
 
@@ -177,11 +296,11 @@ def _find_connected_alerting_nodes(
         root = find(s)
         groups.setdefault(root, set()).add(s)
 
-    return list(groups.values())
+    return sorted(groups.values(), key=lambda group: min(group))
 
 
 # ---------------------------------------------------------------------------
-# 3. lépés: ROOT_CAUSE azonosítása egy csoporton belül
+# 4. lépés: ROOT_CAUSE azonosítása egy csoporton belül
 # ---------------------------------------------------------------------------
 
 def _find_root_cause_in_group(
@@ -204,8 +323,9 @@ def _find_root_cause_in_group(
          Ez a "legmélyebb" csomópont – innen indulnak ki a hibák.
       3. Ha több ilyen csomópont van (pl. két független db node), azt
          választjuk, amelynek a legmagasabb a hibaaránya (http_error_rate).
+         Teljes döntetlen esetén a névsorban első nyer (determinisztikus).
       4. Ha nincs egyértelmű "legmélyebb" (kör az algráfban), a legmagasabb
-         hibaarányú csomópontot választjuk.
+         hibaarányú csomópontot választjuk (ugyanazzal a döntetlen-szabállyal).
 
     Példa (02_cascading_latency forgatókönyv):
       Csoport: {db, payment, inventory, order, api-gateway}
@@ -219,21 +339,15 @@ def _find_root_cause_in_group(
 
     # Azok a csomópontok, amelyeknek nincs kimenő éle a csoporton belül
     # → ők vannak a lánc legvégén (downstream)
-    candidates = [
-        node for node in group
-        if subgraph.out_degree(node) == 0
-    ]
+    candidates = sorted(node for node in group if subgraph.out_degree(node) == 0)
 
     if not candidates:
         # Kör van az algráfban (ritka, de lehetséges) – legmagasabb hibaarányút választjuk
-        candidates = list(group)
+        candidates = sorted(group)
 
-    # A jelöltek közül a legmagasabb http_error_rate-ű nyeri
-    def error_rate(service: str) -> float:
-        node = node_map.get(service)
-        return node.http_error_rate if node else 0.0
-
-    return max(candidates, key=error_rate)
+    # A jelöltek közül a legmagasabb http_error_rate-ű nyeri. A max() döntetlennél
+    # az első elemet adja, a lista rendezett, így a névsorban első nyer.
+    return max(candidates, key=lambda s: _error_rate(node_map, s))
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +365,8 @@ async def correlate(
     Lépések:
       1. Felépíti a NetworkX DiGraph-ot a Kiali gráfból.
       2. Zajszűrés (noise_filter.filter_alerts_batch) – kiszűri a
-         skálázódási és újraindulási zajt.
+         skálázódási és újraindulási zajt, majd az elnyomást továbbterjeszti
+         a hívókra (_propagate_suppression).
       3. A nem-zajnak minősült riasztókat csoportosítja gráf-útvonal alapján.
       4. Minden csoportban megkeresi a ROOT_CAUSE-t, a többit SYMPTOM-nak jelöli.
       5. Összeállítja és visszaadja a CorrelatedIncident objektumot.
@@ -263,6 +378,13 @@ async def correlate(
 
     Visszatér: egyetlen CorrelatedIncident objektum, amely tartalmazza
       az összes érintett csomópontot státusszal és indoklással.
+
+    Több független csoport esetén:
+      Minden csoport gyökéroka ROOT_CAUSE státuszt kap az affected_nodes-ban.
+      Az incidens root_cause_service mezője az ELSŐDLEGES gyökérokot adja:
+        1. a legnagyobb csoport gyökéroka (a legtöbb szolgáltatást érinti),
+        2. döntetlennél a nagyobb hibaarányú,
+        3. további döntetlennél a névsorban első.
 
     Megjegyzés: ha az összes riasztás zajnak minősül, az incidens státusza
     SUPPRESSED lesz, és root_cause_service = None.
@@ -295,55 +417,64 @@ async def correlate(
             # Valódi hibának tűnik – RCA-ra kerül
             real_alerting_services.add(service)
 
+    # 2/b. Az elnyomás továbbterjesztése azokra a hívókra, amelyek riasztása
+    # kizárólag elnyomott zaj következménye
+    real_alerting_services, suppressed_services = _propagate_suppression(
+        real_alerting_services, suppressed_services, G, node_map
+    )
+
     # -------------------------------------------------------------------
-    # 3. Összefüggő csoportok keresése a valódi riasztók között
+    # 3. Az elnyomott csomópontok felvétele (névsorban – determinisztikus)
     # -------------------------------------------------------------------
-    # Ha nincs valódi riasztó, az összes zaj volt → SUPPRESSED incidens
     affected_nodes: List[AffectedNode] = []
 
-    # Elnyomott csomópontok hozzáadása az affected_nodes listához
-    for service, (status, reason) in suppressed_services.items():
+    for service, (status, reason) in sorted(suppressed_services.items()):
         kiali_node = node_map.get(service)
         affected_nodes.append(AffectedNode(
             service=service,
             status=status,
             http_error_rate=kiali_node.http_error_rate if kiali_node else 0.0,
             response_time_ms=kiali_node.response_time_ms if kiali_node else 0.0,
-            severity_score=0.0,  # zajra nem számolunk severity score-t
+            severity_score=0.0,  # a severity_scorer.py tölti ki utólag
             suppression_reason=reason,
         ))
 
-    root_cause_service: Optional[str] = None
+    # -------------------------------------------------------------------
+    # 4. Összefüggő csoportok, ROOT_CAUSE és SYMPTOM azonosítása
+    # -------------------------------------------------------------------
+    group_results: List[Tuple[str, Set[str]]] = []
 
     if real_alerting_services:
-        # -------------------------------------------------------------------
-        # 4. ROOT_CAUSE és SYMPTOM azonosítása
-        # -------------------------------------------------------------------
-        # Összefüggő csoportok megkeresése
-        groups = _find_connected_alerting_nodes(real_alerting_services, G)
-
-        for group in groups:
-            # ROOT_CAUSE megkeresése a csoporton belül
+        for group in _find_connected_alerting_nodes(real_alerting_services, G):
             root_cause = _find_root_cause_in_group(group, G, node_map)
+            group_results.append((root_cause, group))
 
-            # Ha több csoport is van, az első csoport ROOT_CAUSE-át adjuk vissza
-            # (a legsúlyosabbaknál általában egy nagy összefüggő komponens van)
-            if root_cause_service is None:
-                root_cause_service = root_cause
+        # Csoportok sorrendje = az elsődleges gyökérok szabálya:
+        # legnagyobb csoport, majd nagyobb hibaarány, majd név szerint.
+        group_results.sort(
+            key=lambda item: (
+                -len(item[1]),
+                -_error_rate(node_map, item[0]),
+                item[0],
+            )
+        )
 
-            for service in group:
-                kiali_node = node_map.get(service)
-                status = NodeStatus.ROOT_CAUSE if service == root_cause else NodeStatus.SYMPTOM
+    root_cause_service: Optional[str] = group_results[0][0] if group_results else None
 
-                affected_nodes.append(AffectedNode(
-                    service=service,
-                    status=status,
-                    http_error_rate=kiali_node.http_error_rate if kiali_node else 0.0,
-                    response_time_ms=kiali_node.response_time_ms if kiali_node else 0.0,
-                    # severity_score-t a severity_scorer.py tölti ki utólag
-                    severity_score=0.0,
-                    suppression_reason=None,
-                ))
+    for root_cause, group in group_results:
+        for service in sorted(group):
+            kiali_node = node_map.get(service)
+            status = NodeStatus.ROOT_CAUSE if service == root_cause else NodeStatus.SYMPTOM
+
+            affected_nodes.append(AffectedNode(
+                service=service,
+                status=status,
+                http_error_rate=kiali_node.http_error_rate if kiali_node else 0.0,
+                response_time_ms=kiali_node.response_time_ms if kiali_node else 0.0,
+                # severity_score-t a severity_scorer.py tölti ki utólag
+                severity_score=0.0,
+                suppression_reason=None,
+            ))
 
     # -------------------------------------------------------------------
     # 5. CorrelatedIncident összeállítása
@@ -358,11 +489,13 @@ async def correlate(
     correlated_count = len(real_alerting_services)
     raw_alert_count = len([a for a in alerts if a.status == "firing"])
 
-    # Automatikus szöveges összefoglaló generálása
+    # Automatikus szöveges összefoglaló generálása (csoportonként)
     summary = _generate_summary(
-        root_cause_service=root_cause_service,
-        suppressed_services=list(suppressed_services.keys()),
-        real_alerting_services=real_alerting_services,
+        groups=[
+            (root_cause, sorted(group - {root_cause}))
+            for root_cause, group in group_results
+        ],
+        suppressed_services=sorted(suppressed_services),
     )
 
     return score_incident(
@@ -387,9 +520,8 @@ async def correlate(
 # ---------------------------------------------------------------------------
 
 def _generate_summary(
-    root_cause_service: Optional[str],
+    groups: List[Tuple[str, List[str]]],
     suppressed_services: List[str],
-    real_alerting_services: Set[str],
 ) -> str:
     """
     Automatikusan generál egy emberi olvasásra szánt összefoglalót az incidenshez.
@@ -397,22 +529,29 @@ def _generate_summary(
     Ezt az IncidentFeed kártya tetején jeleníti meg a React frontend,
     hogy az üzemeltető egy mondatból megértse, mi történt.
 
+    Csoportonként egy mondat készül: minden gyökérokhoz CSAK a saját csoportjának
+    következményei tartoznak. (Korábban az összes valódi riasztó szolgáltatást
+    egyetlen gyökérokhoz sorolta, ami több független hibánál félrevezető volt.)
+
+    Paraméterek:
+      groups:              [(gyökérok, [következmények])] az incidens csoport-
+                           sorrendjében (az első az elsődleges).
+      suppressed_services: az elnyomott szolgáltatások nevei.
+
     Példák:
-      - "db caused cascading failures in payment, inventory, order."
-      - "All 2 alert(s) suppressed: auth (scaling), inventory (restart)."
-      - "db caused cascading failures in payment. auth suppressed (scaling)."
+      - "'db' caused cascading failures in inventory, order, payment."
+      - "Suppressed as noise: inventory, order."
+      - "'db' caused cascading failures in payment. 'shipping' is failing
+         (no downstream symptoms detected). Suppressed as noise: auth."
     """
     parts: List[str] = []
 
-    if root_cause_service:
-        symptoms = [s for s in real_alerting_services if s != root_cause_service]
+    for root_cause, symptoms in groups:
         if symptoms:
             symptom_list = ", ".join(sorted(symptoms))
-            parts.append(
-                f"'{root_cause_service}' caused cascading failures in {symptom_list}."
-            )
+            parts.append(f"'{root_cause}' caused cascading failures in {symptom_list}.")
         else:
-            parts.append(f"'{root_cause_service}' is failing (no downstream symptoms detected).")
+            parts.append(f"'{root_cause}' is failing (no downstream symptoms detected).")
 
     if suppressed_services:
         suppressed_list = ", ".join(sorted(suppressed_services))

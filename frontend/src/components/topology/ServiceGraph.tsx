@@ -60,6 +60,7 @@ function statusLabel(status: NodeStatus, httpErrorRate: number): string {
     case 'SUPPRESSED':
     case 'SUPPRESSED_SCALING':
     case 'SUPPRESSED_RESTART':
+    case 'SUPPRESSED_DOWNSTREAM':
       return 'SUPPRESSED'
     default:
       return `OK (${(httpErrorRate * 100).toFixed(0)}%)`

@@ -53,6 +53,9 @@ context-aware-alert-correlator/
 ├── backend/
 │   ├── Dockerfile              # python:3.11-slim, uvicorn on :8000
 │   ├── requirements.txt        # fastapi, uvicorn, pydantic, redis, networkx, numpy, scipy, httpx
+│   ├── requirements-dev.txt    # requirements.txt + pytest (not installed in the Docker image)
+│   ├── pytest.ini              # pytest config (run from backend/)
+│   ├── tests/                  # Engine regression tests (scenarios, suppression propagation, determinism)
 │   ├── scenarios/              # Synthetic Kiali + K8s + alert JSON scenarios
 │   │   ├── 00_healthy_baseline.json
 │   │   ├── 01_pod_restart_noise.json
@@ -125,9 +128,11 @@ Scenario IDs are validated against `SCENARIO_FILE_MAP` in `backend/app/collector
 | Scenario ID | File | Expected Outcome |
 |---|---|---|
 | `healthy_baseline` | `00_healthy_baseline.json` | All services healthy — no alerts |
-| `pod_restart_noise` | `01_pod_restart_noise.json` | Restart noise suppressed — no real incident |
+| `pod_restart_noise` | `01_pod_restart_noise.json` | `inventory` = SUPPRESSED_RESTART, its caller `order` = SUPPRESSED_DOWNSTREAM — no real incident |
 | `cascading_db_timeout` | `02_cascading_latency.json` | `db` = ROOT_CAUSE, upstream services = SYMPTOM |
-| `mixed_storm` | `03_mixed_failure.json` | Scaling noise suppressed + 1 correlated incident |
+| `mixed_storm` | `03_mixed_failure.json` | 13 services: three independent failures (`db-main`, `search-index`, `shipping`) + three noise sources (scaling, recent scaling, restart). One incident, primary root cause `db-main` |
+
+The first three scenarios use the same 6-service topology. `mixed_storm` uses its own 13-service topology. The three failure scenarios have an `expected_outcome` section, which the regression tests in `backend/tests/` check automatically (`healthy_baseline` has no alerts and no `expected_outcome`).
 
 ## Getting Started
 
@@ -184,6 +189,16 @@ uvicorn app.main:app --reload
 
 API docs (Swagger UI) available at `http://localhost:8000/docs`.
 
+Run the engine regression tests (no Redis, Kiali or Kubernetes needed, the tests force `DATA_MODE=MOCK`):
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+> On Ubuntu/WSL, if `python3 -m venv` fails with "ensurepip is not available", install `python3.12-venv` (`sudo apt install python3.12-venv`), or create the venv with `--without-pip` and bootstrap pip with `get-pip.py`.
+
 ### 3. Set up the frontend
 
 ```bash
@@ -238,8 +253,16 @@ Implemented and working:
 - `chaos_runner.py` CLI scenario replay.
 - Frontend: SSE-driven live updates, the **React Flow `ServiceGraph`** (status-colored topology in the "Network Response Matrix" panel), `IncidentFeed`, `SystemVitals`, and a time-bucketed `AlertTimeline`.
 - Vite dev proxy (`/api` → backend) configured in `vite.config.ts`.
+- Suppression propagation: a caller whose alerting dependencies are all suppressed noise becomes `SUPPRESSED_DOWNSTREAM` instead of a false root cause.
+- Deterministic engine output (sorted traversal, explicit tie-breaks) and a per-group incident summary.
+- pytest regression suite for the scenarios, the propagation rules and determinism (`backend/tests/`).
 
 Not yet implemented / known gaps:
+
+- The correlation window is written (`push_alert_to_window`) but never read: `correlate()` only sees the alerts of the current webhook call, so alerts arriving in separate calls within 60s are not correlated together.
+- The SeverityScore ignores the node status (a suppressed node can score higher than a root cause) and the response time; the weights (0.5 / 0.3 / 0.2) are not calibrated.
+- The SSE keepalive (`KEEPALIVE_INTERVAL_SECONDS`) is defined but not sent.
+- The `raw` counter counts alerts, while `suppressed` / `correlated` count services, so the three numbers are not additive.
 
 - `config.WINDOW_TTL` exists but is not read by `window_store.py`, which hardcodes a 60s TTL constant.
 - `resolved` Alertmanager events are accepted but not processed (only `firing` alerts are handled).

@@ -154,7 +154,8 @@
 .node--SYMPTOM            { border-left-color: var(--warning); }
 .node--SUPPRESSED,
 .node--SUPPRESSED_SCALING,
-.node--SUPPRESSED_RESTART { border-left-color: var(--warning); border-left-style: dashed; }
+.node--SUPPRESSED_RESTART,
+.node--SUPPRESSED_DOWNSTREAM { border-left-color: var(--warning); border-left-style: dashed; }
 
 .nodeHeader {
   display: flex;
@@ -217,7 +218,8 @@
 
 /* Az elnyomott csomópontok szaggatott kerete megegyezik a gráf jelölésével */
 .tag--SUPPRESSED_SCALING,
-.tag--SUPPRESSED_RESTART {
+.tag--SUPPRESSED_RESTART,
+.tag--SUPPRESSED_DOWNSTREAM {
   color: var(--warning);
   border-color: var(--warning);
   border-style: dashed;

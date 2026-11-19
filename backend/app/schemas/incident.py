@@ -52,6 +52,12 @@ class NodeStatus(str, Enum):
                            az átmeneti hiba várható és nem valódi incidens.
       SUPPRESSED_RESTART:  A pod az elmúlt percben újraindult (restarts_last_minute > 0),
                            az átmeneti 503-as hiba ehhez köthető.
+      SUPPRESSED_DOWNSTREAM:
+                           A csomópont saját K8s állapota rendben van, de az összes
+                           riasztó downstream függősége elnyomott zaj. A riasztása az
+                           elnyomott szolgáltatás átmeneti hibájának következménye
+                           (pl. az inventory újraindul, ezért az order latenciája nő).
+                           A graph_correlator.py propagációs lépése állítja be.
     """
 
     HEALTHY = "HEALTHY"
@@ -60,6 +66,7 @@ class NodeStatus(str, Enum):
     SUPPRESSED = "SUPPRESSED"
     SUPPRESSED_SCALING = "SUPPRESSED_SCALING"
     SUPPRESSED_RESTART = "SUPPRESSED_RESTART"
+    SUPPRESSED_DOWNSTREAM = "SUPPRESSED_DOWNSTREAM"
 
 
 class IncidentStatus(str, Enum):

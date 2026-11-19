@@ -16,6 +16,7 @@ export type NodeStatus =
   | 'SUPPRESSED'
   | 'SUPPRESSED_SCALING'
   | 'SUPPRESSED_RESTART'
+  | 'SUPPRESSED_DOWNSTREAM'
 
 export type IncidentStatus = 'OPEN' | 'SUPPRESSED' | 'RESOLVED'
 

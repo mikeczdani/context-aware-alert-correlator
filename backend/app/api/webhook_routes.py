@@ -133,6 +133,7 @@ async def receive_alerts(
     # -------------------------------------------------------------------
     # correlate() lefuttatja:
     #   - noise_filter.filter_alerts_batch() (zajszűrés)
+    #   - _propagate_suppression() (az elnyomás továbbterjesztése a hívókra)
     #   - _find_connected_alerting_nodes() (csoportosítás)
     #   - _find_root_cause_in_group() (RCA)
     #   - score_incident() (severity scoring)

@@ -199,9 +199,9 @@ async def get_metrics() -> SystemMetrics:
     ARR % képlete (a markdownból):
       ARR = (1 - correlated_incidents / raw_alerts) * 100
 
-    Példa (03_mixed_storm forgatókönyv):
-      raw_alerts = 6, correlated_incidents = 1
-      ARR = (1 - 1/6) * 100 = 83.3%
+    Példa (03_mixed_failure / mixed_storm forgatókönyv):
+      raw_alerts = 12 (a lejárt riasztás nem számít), correlated_incidents = 1
+      ARR = (1 - 1/12) * 100 = 91.67%
     """
     r = await get_redis()
 
